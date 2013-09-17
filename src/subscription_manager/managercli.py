@@ -133,7 +133,8 @@ CONSUMED_LIST = [
     _("System Type:"),
     _("Status Details:"),
     _("Starts:"),
-    _("Ends:")
+    _("Ends:"),
+    _("System Type:")
 ]
 
 
@@ -2168,7 +2169,8 @@ class ListCommand(CliCommand):
                     system_type,
                     reasons,
                     managerlib.format_date(cert.valid_range.begin()),
-                    managerlib.format_date(cert.valid_range.end())) + "\n"
+                    managerlib.format_date(cert.valid_range.end()),
+                    system_type) + "\n"
 
 
 class VersionCommand(CliCommand):
