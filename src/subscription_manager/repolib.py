@@ -44,15 +44,15 @@ class RepoLib(DataLib):
         DataLib.__init__(self, lock, uep)
 
     def _do_update(self):
-        action = UpdateAction(self.uep, refresh_overrides = self.refresh_overrides)
+        action = UpdateAction(self.uep, refresh_overrides=self.refresh_overrides)
         return action.perform()
 
     def is_managed(self, repo):
-        action = UpdateAction(self.uep, refresh_overrides = self.refresh_overrides)
+        action = UpdateAction(self.uep, refresh_overrides=self.refresh_overrides)
         return repo in [c.label for c in action.matching_content()]
 
     def get_repos(self, apply_overrides=True):
-        action = UpdateAction(self.uep, refresh_overrides = self.refresh_overrides)
+        action = UpdateAction(self.uep, refresh_overrides=self.refresh_overrides)
         repos = action.get_unique_content(apply_overrides)
         if ConsumerIdentity.existsAndValid() and action.override_supported:
             return repos

@@ -148,7 +148,8 @@ class RepositoriesDialog(widgets.GladeWidget, HasSortableWidget):
             overrides_per_repo.setdefault(repo_id, {})
             overrides_per_repo[repo_id][override['name']] = override['value']
 
-        self.overrides_store.clear();
+        self.overrides_store.clear()
+
         # Fetch the repositories from repolib without any overrides applied.
         # We do this so that we can tell if anything has been modified by
         # overrides.
@@ -224,7 +225,6 @@ class RepositoriesDialog(widgets.GladeWidget, HasSortableWidget):
         confirm = YesNoDialog(_("Are you sure you want to remove all overrides for <b>%s</b>?") % selection['repo_id'],
                                  self._get_dialog_widget(), _("Confirm Remove All Overrides"))
         confirm.connect("response", self._on_reset_repo_response)
-
 
     def _on_reset_repo_response(self, dialog, response):
         if not response:
@@ -317,7 +317,6 @@ class RepositoriesDialog(widgets.GladeWidget, HasSortableWidget):
                                                      "gpgcheck", int(current_cb_value))
 
         self._send_override(override)
-
 
     def _set_gpg_lock_state(self, locked):
         if locked:
