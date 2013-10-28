@@ -46,7 +46,11 @@ class RepositoriesDialog(widgets.GladeWidget, HasSortableWidget):
         self.backend = backend
         self.cache = require(OVERRIDE_STATUS_CACHE)
         self.identity = require(IDENTITY)
-        self.repo_lib = RepoLib(uep=self.backend.cp_provider.get_consumer_auth_cp())
+
+        # No need to have RepoLib refresh the overrides since the override cache
+        # will be updated for each action.
+        self.repo_lib = RepoLib(uep=self.backend.cp_provider.get_consumer_auth_cp(),
+                                refresh_overrides=False)
 
         self.glade.signal_autoconnect({
                 "on_dialog_delete_event": self._on_close,
@@ -129,6 +133,7 @@ class RepositoriesDialog(widgets.GladeWidget, HasSortableWidget):
 
     def _load_data(self):
         cp = self.backend.cp_provider.get_consumer_auth_cp()
+        # pull the latest overrides from the cache which will be the ones from the server.
         current_overrides = self.cache.load_status(cp, self.identity.uuid) or []
         self._refresh(current_overrides)
         # By default sort by repo_id
@@ -144,6 +149,9 @@ class RepositoriesDialog(widgets.GladeWidget, HasSortableWidget):
             overrides_per_repo[repo_id][override['name']] = override['value']
 
         self.overrides_store.clear();
+        # Fetch the repositories from repolib without any overrides applied.
+        # We do this so that we can tell if anything has been modified by
+        # overrides.
         for repo in self.repo_lib.get_repos(apply_overrides=False):
             overrides = overrides_per_repo.get(repo.id, None)
             modified = not overrides is None
