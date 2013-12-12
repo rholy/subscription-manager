@@ -35,6 +35,8 @@ log = logging.getLogger('rhsm-app.' + __name__)
 
 NOT_REGISTERED = _("This system is not yet registered. Try 'subscription-manager register --help' for more information.")
 
+ASSEMBLE_DIR = '/var/spool/rhsm/debug'
+
 
 class SystemCommand(CliCommand):
 
@@ -45,7 +47,10 @@ class SystemCommand(CliCommand):
 
         self.parser.add_option("--destination", dest="destination",
                                default="/tmp", help=_("the destination location of the result"))
-        self.parser.add_option("--no-archive", action='store_true',
+        # default is to build an archive, this skips the archive and clean up,
+        # just leaving the directory of debug info for sosreport to report
+        self.parser.add_option("--no-archive", action='store_false',
+                               default=True, dest="archive",
                                help=_("data will be in an uncompressed directory"))
 
     def _get_usage(self):
@@ -56,7 +61,7 @@ class SystemCommand(CliCommand):
         if not consumer.is_valid():
             print NOT_REGISTERED
             sys.exit(-1)
-        owner = self.cp.getOwner(consumer.uuid)
+
         code = self._make_code()
         assemble_path = self._get_assemble_dir()
         content_path = os.path.join(assemble_path, code)
@@ -64,11 +69,15 @@ class SystemCommand(CliCommand):
 
         try:
             os.makedirs(content_path)
+
+            owner = self.cp.getOwner(consumer.uuid)
+
             try:
                 self._write_flat_file(content_path, "subscriptions.json",
                                       self.cp.getSubscriptionList(owner['key']))
             except Exception, e:
                 log.warning("Server does not allow retrieval of subscriptions by owner.")
+
             self._write_flat_file(content_path, "consumer.json",
                                   self.cp.getConsumer(consumer.uuid))
             self._write_flat_file(content_path, "compliance.json",
@@ -80,6 +89,7 @@ class SystemCommand(CliCommand):
             self._write_flat_file(content_path, "version.json",
                                   self._get_version_info())
 
+            # FIXME: we need to anon proxy passwords?
             self._copy_directory('/etc/rhsm', content_path)
             self._copy_directory('/var/log/rhsm', content_path)
             self._copy_directory('/var/lib/rhsm', content_path)
@@ -87,19 +97,31 @@ class SystemCommand(CliCommand):
             self._copy_directory(cfg.get('rhsm', 'entitlementCertDir'), content_path)
             self._copy_directory(cfg.get('rhsm', 'consumerCertDir'), content_path)
 
+            # FIXME: this could still be in /tmp
+            # FIXME: destination is user input from a trusted user, but it
+            # could still be something dumb
+            print "destination", self.options.destination
             if not os.path.exists(self.options.destination):
                 os.makedirs(self.options.destination)
 
-            if not self.options.no_archive:
+            # build an archive by default
+            if self.options.archive:
                 os.makedirs(tar_path)
                 tar_file_path = os.path.join(tar_path, "tmp-system.tar")
+                print "tar_path", tar_path, tar_file_path
                 tf = tarfile.open(tar_file_path, "w:gz")
+                # FIXME: full name
                 tf.add(content_path, code)
                 tf.close()
                 final_path = os.path.join(self.options.destination, "system-debug-%s.tar.gz" % code)
+                print "final_path", final_path
+
+                # FIXME: move securely
+                # FIXME: perms should be 0600, only root can read
                 shutil.move(tar_file_path, final_path)
                 print _("Wrote: %s") % final_path
             else:
+                # FIXME: need to do this securely
                 shutil.move(content_path, self.options.destination)
 
                 print _("Wrote: %s/%s") % (self.options.destination, code)
@@ -120,16 +142,16 @@ class SystemCommand(CliCommand):
                 "subscription-manager": self.client_versions["subscription-manager"],
                 "python-rhsm": self.client_versions["python-rhsm"]}
 
-    def _write_flat_file(self, path, filename, content):
-        file_path = os.path.join(path, filename)
-        with open(file_path, "w+") as fo:
+    def _write_flat_file(self, content_path, filename, content):
+        path = os.path.join(content_path, filename)
+        with open(path, "w+") as fo:
             fo.write(json.dumps(content, indent=4, sort_keys=True))
 
-    def _copy_directory(self, path, prefix):
-        dest_path = path
-        if os.path.isabs(dest_path):
-            dest_path = dest_path[1:]
-        shutil.copytree(path, os.path.join(prefix, dest_path))
+    def _copy_directory(self, src_path, dest_path):
+        rel_path = src_path
+        if os.path.isabs(src_path):
+            rel_path = src_path[1:]
+        shutil.copytree(src_path, os.path.join(dest_path, rel_path))
 
     def _get_assemble_dir(self):
-        return '/var/spool/rhsm/debug'
+        return ASSEMBLE_DIR
