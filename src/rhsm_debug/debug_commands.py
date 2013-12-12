@@ -87,7 +87,7 @@ class DebugInfo(object):
         self.uuid = consumer_uuid
         self.archiver = archiver
         self.writer = destination_writer
-        self.collector = DebugInfoCollector()
+        self.collector = DebugInfoCollector(self.archiver)
 
     def collect(self):
         self.collector.collect()
@@ -97,37 +97,35 @@ class DebugInfo(object):
 
 
 class DebugInfoCollector(object):
+    def __init__(self, archiver):
+        self.archive = archiver
+
     def collect(self):
-        os.makedirs(self.content_path)
 
         owner = self.cp.getOwner(self.uuid)
 
         try:
-            self._write_flat_file(content_path, "subscriptions.json",
-                                    self.cp.getSubscriptionList(owner['key']))
-        except Exception, e:
+            self.archive.add_json("subscriptions",
+                                  self.cp.getSubscriptionList(owner['key']))
+        except Exception:
             log.warning("Server does not allow retrieval of subscriptions by owner.")
 
         # self.archive.add_json("consumer", self.cp.getConsumer(self.uuid))
-        self._write_flat_file(content_path, "consumer.json",
-                                self.cp.getConsumer(self.uuid))
-        self._write_flat_file(content_path, "compliance.json",
-                                self.cp.getCompliance(self.uuid))
-        self._write_flat_file(content_path, "entitlements.json",
-                                self.cp.getEntitlementList(self.uuid))
-        self._write_flat_file(content_path, "pools.json",
-                                self.cp.getPoolsList(self.uuid, True, None, owner['key']))
-        self._write_flat_file(content_path, "version.json",
-                                self._get_version_info())
+        self.archive.add_json("consumer", self.cp.getConsumer(self.uuid))
+        self.archive.add_json("compliance", self.cp.getCompliance(self.uuid))
+        self.archive.add_json("entitlements", self.cp.getEntitlementList(self.uuid))
+        self.archive.add_json("pools",
+                              self.cp.getPoolsList(self.uuid, True, None, owner['key']))
+        self.archive.add_json("version", self._get_version_info())
 
         # FIXME: we need to anon proxy passwords?
         #self.add_dir("/etc/rhsm")
-        self._copy_directory('/etc/rhsm', content_path)
-        self._copy_directory('/var/log/rhsm', content_path)
-        self._copy_directory('/var/lib/rhsm', content_path)
-        self._copy_directory(cfg.get('rhsm', 'productCertDir'), content_path)
-        self._copy_directory(cfg.get('rhsm', 'entitlementCertDir'), content_path)
-        self._copy_directory(cfg.get('rhsm', 'consumerCertDir'), content_path)
+        self.add_dir('/etc/rhsm')
+        self.add_dir('/var/log/rhsm')
+        self.add_dir('/var/lib/rhsm')
+        self.add_dir(cfg.get('rhsm', 'productCertDir'))
+        self.add_dir(cfg.get('rhsm', 'entitlementCertDir'))
+        self.add_dir(cfg.get('rhsm', 'consumerCertDir'))
 
         # FIXME: this could still be in /tmp
         # FIXME: destination is user input from a trusted user, but it
@@ -207,6 +205,8 @@ class DebugInfoArchiver(object):
 
     def __init__(self, archive_config):
         self.config = archive_config
+
+        os.makedirs(self.config.content_path)
 
     def add_json(self, name, json_blob):
         self._write_flat_file(self.config.content_path,
