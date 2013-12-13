@@ -35,6 +35,7 @@ log = logging.getLogger('rhsm-app.' + __name__)
 NOT_REGISTERED = _("This system is not yet registered. Try 'subscription-manager register --help' for more information.")
 
 ASSEMBLE_DIR = '/var/spool/rhsm/debug'
+ROOT_READ_ONLY = 0600
 
 
 class SystemCommand(managercli.CliCommand):
@@ -296,7 +297,8 @@ class DebugInfoTarWriter(object):
 
         # If we are just writing a file, we can try it O_EXCL and copy the
         # contents
-        shutil.move(self.config.tar_path, dest_path)
+        sfm = SaferFileMove()
+        sfm.move(self.config.tar_path, dest_path)
         print _("Wrote tar.gz: %s") % dest_path
 
 
@@ -310,6 +312,9 @@ class DebugInfoDirWriter(object):
     def _move(self):
         dest_dir = os.path.join(self.config.destination,
                                 self.config.archive_name)
+
+        sdr = SaferDirRename()
+        sdr.rename(self.config.content_path, dest_dir)
         # FIXME: move Safer stuff from branch
         shutil.move(self.config.content_path, self.options.destination)
 
@@ -347,3 +352,48 @@ class DebugInfoArchiver(object):
         if os.path.isabs(src_path):
             rel_path = src_path[1:]
         shutil.copytree(src_path, os.path.join(dest_path, rel_path))
+
+
+class SaferFileMove(object):
+    def __init__(self):
+        # based on shutils copyfileob
+        self.buf_size = 16 * 1024
+        # only root can read
+        self.default_perms = ROOT_READ_ONLY
+
+    def move(self, src, dest):
+        """Move a file to a dest file potentially in /tmp more safely.
+
+        We want to
+        create it excl if we can."""
+        with open(src, 'r') as src_fo:
+            # if dest doesn't exist, and we can open it excl, then open it,
+            # keep the fd, create a file object for it, and write to it
+            with self._open_excl(dest) as dest_fo:
+                self._copyfileobj(src_fo, dest_fo)
+
+        os.unlink(src)
+
+    def _open_excl(self, path):
+        """Return a file object that we know we created and nothing else owns."""
+        return os.fdopen(os.open(path, os.O_RDWR | os.O_CREAT | os.O_EXCL,
+                                 self.default_perms), 'w+')
+
+    def _copyfileobj(self, src_fo, dest_fo):
+        while 1:
+            buf = src_fo.read(self.buf_size)
+            if not buf:
+                break
+            dest_fo.write(buf)
+
+
+class SaferDirRename(object):
+    def rename(self, src_dir_name, dest_dir_name):
+        # create the dest dir, and set it's perms, this is atomic ish
+        # then we know we own it
+        os.mkdir(dest_dir_name, ROOT_READ_ONLY)
+
+        # try to rename the dir atomically, will fail across
+        # filesystems. Ie, instead of copying the dir contents to
+        # say, /tmp, we just rename the existing dir.
+        os.rename(src_dir_name, dest_dir_name)
