@@ -49,7 +49,7 @@ class SystemCommand(managercli.CliCommand):
         # default is to build an archive, this skips the archive and clean up,
         # just leaving the directory of debug info for sosreport to report
         self.parser.add_option("--no-archive", action='store_false',
-                               default=True, dest="archive",
+                               default=True, dest="write_archive",
                                help=_("data will be in an uncompressed directory"))
 
     def _get_usage(self):
@@ -61,100 +61,202 @@ class SystemCommand(managercli.CliCommand):
             print NOT_REGISTERED
             sys.exit(-1)
 
-        archive_config = DebugInfoArchiveConfig()
-        archiver = DebugInfoArchiver(archive_config)
+        self._debug_info(consumer.uuid,
+                         self.cp,
+                         cfg_ref=cfg,
+                         server_versions=self.server_versions,
+                         client_versions=self.client_versions,
+                         dest_dir=self.options.destination,
+                         write_archive=self.options.write_archive)
 
-        if self.options.archive:
-            writer = DebugInfoTarWriter()
-        else:
-            writer = DebugInfoDirWriter()
-
-        debug_info = DebugInfo(consumer.uuid, archiver, writer)
-
-        # config the archive
-        # collect the archive
-        # persist the archive
-        # move the archive
-        # cleanup up the mess
+    def _debug_info(self, consumer_uuid, cp, cfg_ref,
+                    server_versions, client_versions,
+                    dest_dir, write_archive):
+        debug_info = DebugInfo(consumer_uuid=consumer_uuid,
+                               cp=cp,
+                               cfg_ref=cfg_ref,
+                               server_versions=server_versions,
+                               client_versions=client_versions,
+                               dest_dir=dest_dir,
+                               write_archive=write_archive)
 
         # FIXME: exception handling
         debug_info.collect()
         debug_info.save()
+        debug_info.cleanup()
 
 
 class DebugInfo(object):
-    def __init__(self, consumer_uuid, archiver=None, destination_writer=None):
-        self.uuid = consumer_uuid
-        self.archiver = archiver
-        self.writer = destination_writer
-        self.collector = DebugInfoCollector(self.archiver)
+    def __init__(self, consumer_uuid,
+                 cp, dest_dir,
+                 cfg_ref,
+                 server_versions=None,
+                 client_versions=None,
+                 write_archive=False):
+        # TODO: it would be useful if we could
+        self.archive_config = DebugInfoArchiveConfig(destination=dest_dir)
+        self.archiver = DebugInfoArchiver(archive_config=self.archive_config)
+
+        import pprint
+        pprint.pprint(self.archive_config)
+        pprint.pprint(self.archive_config.__dict__)
+
+        self.server_versions = server_versions or {}
+        self.client_versions = client_versions or {}
+
+        api_info_collector = DebugInfoApiCollector(consumer_uuid, cp, self.archiver)
+        dir_info_collector = DebugInfoDirCollector(self.archiver, cfg_ref)
+        ver_info_collector = DebugInfoVersionCollector(self.archiver,
+                                                       server_versions,
+                                                       client_versions)
+
+        collectors = [api_info_collector,
+                      dir_info_collector,
+                      ver_info_collector]
+
+        self.collector = DebugInfoCollector(collectors)
+
+        if write_archive:
+            self.writer = DebugInfoTarWriter(self.archive_config)
+        else:
+            self.writer = DebugInfoDirWriter(self.archive_config)
 
     def collect(self):
         self.collector.collect()
 
     def save(self):
-        self.archiver.save()
+        self.writer.save()
+
+    def cleanup(self):
+        # could add collector cleanup here if needed
+        self.archiver.cleanup()
+        self.writer.cleanup()
 
 
 class DebugInfoArchiveConfig(object):
-    def __init__(self):
+    def __init__(self, destination=None):
         self.assemble_path = ASSEMBLE_DIR
         self.archive_name_slug = "rhsm-system-debug"
         self.archive_name_suffix = self._gen_archive_name_suffix()
-        self.archive_name = "%s-%s" % (self.archive_name_slub, self.archive_name_suffix)
+        self.archive_name = "%s-%s" % (self.archive_name_slug, self.archive_name_suffix)
 
         self.tarball_name = "%s.tar.gz" % (self.archive_name)
         self.content_path = os.path.join(self.assemble_path, self.archive_name)
         # /var/spool/rhsm/
         self.tar_path = os.path.join(self.assemble_path, self.tarball_name)
+        self.destination = destination
+        self.destination_file = os.path.join(self.destination, self.archive_name)
 
     def _gen_archive_name_suffix(self):
         return datetime.now().strftime("%Y%m%d-%f")
 
 
-class DebugInfoCollector(object):
-    def __init__(self, archiver):
-        self.archive = archiver
+class ConsumerDebugInfo(object):
+    def __init__(self,
+                 owner=None,
+                 subscriptions=None,
+                 consumer=None,
+                 entitlements=None,
+                 pools=None):
+        self.owner = owner
+        self.subscriptions = subscriptions
+        self.consumer = consumer
+        self.entitlements = entitlements,
+        self.pools = pools
 
-    def collect(self):
 
+class DebugInfoApiCollector(object):
+    def __init__(self, consumer_uuid, cp, archiver):
+        self.uuid = consumer_uuid
+        self.cp = cp
+        self.archiver = archiver
+
+        self.data = ConsumerDebugInfo()
+
+    def gather(self):
         owner = self.cp.getOwner(self.uuid)
+        self.data.owner = owner
 
         try:
-            self.archive.add_json("subscriptions",
-                                  self.cp.getSubscriptionList(owner['key']))
-        except Exception:
+            self.data.subscriptions = self.cp.getSubscriptionList(owner['key'])
+        except Exception:   # FIXME
             log.warning("Server does not allow retrieval of subscriptions by owner.")
 
-        # self.archive.add_json("consumer", self.cp.getConsumer(self.uuid))
-        self.archive.add_json("consumer", self.cp.getConsumer(self.uuid))
-        self.archive.add_json("compliance", self.cp.getCompliance(self.uuid))
-        self.archive.add_json("entitlements", self.cp.getEntitlementList(self.uuid))
-        self.archive.add_json("pools",
-                              self.cp.getPoolsList(self.uuid, True, None, owner['key']))
-        self.archive.add_json("version", self._get_version_info())
+        self.data.consumer = self.cp.getConsumer(self.uuid)
+        self.data.compliance = self.cp.getCompliance(self.uuid)
+        self.data.entitlements = self.cp.getEntitlementList(self.uuid)
+        # FIXME: add keyswords for these args
+        self.data.pools = self.cp.getPoolsList(self.uuid, True, None, owner['key'])
 
-        # FIXME: we need to anon proxy passwords?
-        #self.add_dir("/etc/rhsm")
-        self.add_dir('/etc/rhsm')
-        self.add_dir('/var/log/rhsm')
-        self.add_dir('/var/lib/rhsm')
-        self.add_dir(cfg.get('rhsm', 'productCertDir'))
-        self.add_dir(cfg.get('rhsm', 'entitlementCertDir'))
-        self.add_dir(cfg.get('rhsm', 'consumerCertDir'))
+    def add_to_archive(self):
+        self.add_json("owner", self.data.owner)
+        self.add_json("subscriptions", self.data.subscriptions)
+        self.add_json("consumer", self.data.consumer)
+        self.add_json("entitlements", self.data.entitlements)
+        self.add_json("pools", self.data.pools)
 
-        # FIXME: this could still be in /tmp
-        # FIXME: destination is user input from a trusted user, but it
-        # could still be something dumb
-        print "destination", self.options.destination
-        if not os.path.exists(self.options.destination):
-            os.makedirs(self.options.destination)
+    def add_json(self, name, data):
+        self.archiver.add_json(name, data)
+
+
+class DebugInfoDirCollector(object):
+    def __init__(self, archiver, cfg):
+        self.archiver = archiver
+        self.cfg = cfg
+
+        self.dirs = ["/etc/rhsm",
+                     "/var/log/rhsm",
+                     "/var/lib/rhsm",
+                     cfg.get('rhsm', 'productCertDir'),
+                     cfg.get('rhsm', 'entitlementCertDir'),
+                     cfg.get('rhsm', 'consumerCertDir')]
+
+    def gather(self):
+        pass
+
+    def add_to_archive(self):
+        for dir_path in self.dirs:
+            self.add_dir(dir_path)
+
+    def add_dir(self, dir_path):
+        self.archiver.add_dir(dir_path)
+
+
+class DebugInfoVersionCollector(object):
+    def __init__(self, archiver, server_versions, client_versions):
+        self.archiver = archiver
+        self.server_versions = server_versions
+        self.client_versions = client_versions
+
+    def gather(self):
+        self.version_info = self._get_version_info()
 
     def _get_version_info(self):
         return {"server type": self.server_versions["server-type"],
                 "subscription management server": self.server_versions["candlepin"],
                 "subscription-manager": self.client_versions["subscription-manager"],
                 "python-rhsm": self.client_versions["python-rhsm"]}
+
+    def add_to_archive(self):
+        self.add_json("version", self.version_info)
+
+    def add_json(self, name, data):
+        self.archiver.add_json(name, data)
+
+
+class DebugInfoCollector(object):
+    def __init__(self, collectors=None):
+        self.collectors = collectors or []
+
+    def collect(self):
+        for collector in self.collectors:
+            collector.gather()
+
+        for collector in self.collectors:
+            collector.add_to_archive()
+
+    def add_json(self, name, data):
+        self.archiver.add_json(name, data)
 
 
 class SaferFileCopy(object):
@@ -169,13 +271,19 @@ class SaferFileCopy(object):
 
 
 class DebugInfoTarWriter(object):
+    def __init__(self, archive_config):
+        self.config = archive_config
+
     def save(self):
-        with tarfile.open(self.config.tar_path, "w:gz") as tf:
+        try:
+            tf = tarfile.open(self.config.tar_path, "w:gz")
+            tf.add(self.config.content_path)
+        finally:
+            tf.close()
             # FIXME: full name
-            tf.add(self.content_path)
 
         # hmm, dest comes from?
-        self._move(self.config.dest_path)
+        self._move(self.config.destination_file)
 
     def _move(self, dest_path):
         # FIXME: move securely
@@ -186,20 +294,23 @@ class DebugInfoTarWriter(object):
 
         # If we are just writing a file, we can try it O_EXCL and copy the
         # contents
-        shutil.move(tar_file_path, dest_path)
+        shutil.move(self.config.tar_path, dest_path)
         print _("Wrote: %s") % dest_path
 
 
 class DebugInfoDirWriter(object):
+    def __init__(self, archive_config):
+        self.config = archive_config
+
     def save(self):
         self._move()
 
     def _move(self):
         # FIXME: need to do this securely
-        shutil.move(content_path, self.options.destination)
+        shutil.move(self.config.content_path, self.options.destination)
 
-        print _("Wrote: %s/%s") % (self.options.destination, code)
-
+        print _("Wrote: %s/%s") % (self.config.destination,
+                                   self.config.destination_file)
 
 
 class DebugInfoArchiver(object):
@@ -218,9 +329,10 @@ class DebugInfoArchiver(object):
         self._copy_directory(dir_path, self.config.content_path)
 
     def cleanup(self):
+        pass
         #FIXME: handle errors
-        os.unlink(self.config.content_path)
-        os.unlink(self.config.tar_path)
+        #os.unlink(self.config.content_path)
+#        os.unlink(self.config.tar_path)
 
     def _write_flat_file(self, content_path, filename, content):
         path = os.path.join(content_path, filename)
