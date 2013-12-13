@@ -83,7 +83,7 @@ class SystemCommand(managercli.CliCommand):
         # FIXME: exception handling
         debug_info.collect()
         debug_info.save()
-        debug_info.cleanup()
+    #    debug_info.cleanup()
 
 
 class DebugInfo(object):
@@ -283,7 +283,9 @@ class DebugInfoTarWriter(object):
             # FIXME: full name
 
         # hmm, dest comes from?
-        self._move(self.config.destination_file)
+        dest_file = os.path.join(self.config.destination,
+                                 self.config.tarball_name)
+        self._move(dest_file)
 
     def _move(self, dest_path):
         # FIXME: move securely
@@ -295,7 +297,7 @@ class DebugInfoTarWriter(object):
         # If we are just writing a file, we can try it O_EXCL and copy the
         # contents
         shutil.move(self.config.tar_path, dest_path)
-        print _("Wrote: %s") % dest_path
+        print _("Wrote tar.gz: %s") % dest_path
 
 
 class DebugInfoDirWriter(object):
@@ -306,11 +308,12 @@ class DebugInfoDirWriter(object):
         self._move()
 
     def _move(self):
-        # FIXME: need to do this securely
+        dest_dir = os.path.join(self.config.destination,
+                                self.config.archive_name)
+        # FIXME: move Safer stuff from branch
         shutil.move(self.config.content_path, self.options.destination)
 
-        print _("Wrote: %s/%s") % (self.config.destination,
-                                   self.config.destination_file)
+        print _("Wrote directory: %s") % (dest_dir)
 
 
 class DebugInfoArchiver(object):
