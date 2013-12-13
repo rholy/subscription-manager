@@ -96,6 +96,22 @@ class DebugInfo(object):
         self.archiver.save()
 
 
+class DebugInfoArchiveConfig(object):
+    def __init__(self):
+        self.assemble_path = ASSEMBLE_DIR
+        self.archive_name_slug = "rhsm-system-debug"
+        self.archive_name_suffix = self._gen_archive_name_suffix()
+        self.archive_name = "%s-%s" % (self.archive_name_slub, self.archive_name_suffix)
+
+        self.tarball_name = "%s.tar.gz" % (self.archive_name)
+        self.content_path = os.path.join(self.assemble_path, self.archive_name)
+        # /var/spool/rhsm/
+        self.tar_path = os.path.join(self.assemble_path, self.tarball_name)
+
+    def _gen_archive_name_suffix(self):
+        return datetime.now().strftime("%Y%m%d-%f")
+
+
 class DebugInfoCollector(object):
     def __init__(self, archiver):
         self.archive = archiver
@@ -154,17 +170,12 @@ class SaferFileCopy(object):
 
 class DebugInfoTarWriter(object):
     def save(self):
-        os.makedirs(tar_path)
-        tar_file_path = os.path.join(tar_path, "tmp-system.tar")
-        print "tar_path", tar_path, tar_file_path
-        tf = tarfile.open(tar_file_path, "w:gz")
-        # FIXME: full name
-        tf.add(content_path, code)
-        tf.close()
-        dest_path = os.path.join(self.options.destination, "system-debug-%s.tar.gz" % code)
-        print "dest_path", dest_path
+        with tarfile.open(self.config.tar_path, "w:gz") as tf:
+            # FIXME: full name
+            tf.add(self.content_path)
 
-        self._move(dest_path)
+        # hmm, dest comes from?
+        self._move(self.config.dest_path)
 
     def _move(self, dest_path):
         # FIXME: move securely
@@ -189,16 +200,6 @@ class DebugInfoDirWriter(object):
 
         print _("Wrote: %s/%s") % (self.options.destination, code)
 
-
-class DebugInfoArchiveConfig(object):
-    def __init__(self):
-        self.assemble_path = ASSEMBLE_DIR
-        self.archive_name = self._gen_archive_name()
-        self.content_path = os.path.join(self.assemble_path, self.archive_name)
-        self.tar_path = os.path.join(self.assemble_path, "tar")
-
-    def _gen_archive_name(self):
-        return datetime.now().strftime("%Y%m%d-%f")
 
 
 class DebugInfoArchiver(object):
