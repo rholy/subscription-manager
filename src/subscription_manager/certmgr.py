@@ -35,11 +35,12 @@ log = logging.getLogger('rhsm-app.' + __name__)
 _ = gettext.gettext
 
 
-class BaseCertManager:
+class BaseCertManager(object):
     """
     An object used to update the certficates, yum repos, and facts for the system.
     """
 
+    _libset_classes = []
     # can we inject both of these?
     def __init__(self, uep=None, facts=None):
 
@@ -53,7 +54,13 @@ class BaseCertManager:
         self.update_reports = []
 
     def _get_libset(self):
-        return []
+        libset = []
+        # TODO: comprehension
+        # TODO: remove uep, default to no args
+        for lib_class in self._libset_classes:
+            libset.append(lib_class(uep=self.uep))
+
+        return libset
 
     def update(self, autoheal=False):
         """
@@ -107,39 +114,19 @@ class BaseCertManager:
 
 class CertManager(BaseCertManager):
 
-    def _get_libset(self):
+    _libset = [EntCertLib,
+               IdentityCertLib,
+               RepoLib,
+               FactLib,
+               PackageProfileLib,
+               InstalledProductsLib]
 
-        self.entcertlib = EntCertLib(uep=self.uep)
-        self.repolib = RepoLib(uep=self.uep)
-        self.factlib = FactLib(uep=self.uep)
-        self.profilelib = PackageProfileLib(uep=self.uep)
-        self.installedprodlib = InstalledProductsLib(uep=self.uep)
-        self.idcertlib = IdentityCertLib(uep=self.uep)
-
-        # WARNING: order is important here, we need to update a number
-        # of things before attempting to autoheal, and we need to autoheal
-        # before attempting to fetch our certificates:
-        lib_set = [self.entcertlib, self.idcertlib, self.repolib,
-                   self.factlib, self.profilelib,
-                   self.installedprodlib]
-
-        return lib_set
 
 
 class HealingCertManager(BaseCertManager):
-    def _get_libset(self):
-
-        self.entcertlib = EntCertLib(uep=self.uep)
-        self.installedprodlib = InstalledProductsLib(uep=self.uep)
-        self.healinglib = HealingLib(self.uep)
-
-        # FIXME: note this runs entcertlib twice, once to make sure we are
-        # setup, then again after heal to get any additional certs. We may be
-        # able to avoid that by conditionally calling entcertlib from within
-        # healinglib (as we did before)
-        lib_set = [self.installedprodlib, self.healinglib, self.entcertlib]
-
-        return lib_set
+    _libset = [InstalledProductsLib,
+               HealingLib,
+               EntCertLib]
 
 
 # it may make more sense to have *Lib.cleanup actions?
@@ -152,10 +139,5 @@ class UnregisterCertManager(BaseCertManager):
     This class should not need a consumer id, or a uep connection, since it
     is running post unregister.
     """
-    def _get_libset(self):
-
-        self.entcertlib = EntCertLib(uep=self.uep)
-        self.repolib = RepoLib(uep=self.uep)
-
-        lib_set = [self.entcertlib, self.repolib]
-        return lib_set
+    _libset = [EntCertLib,
+               RepoLib]
