@@ -96,7 +96,7 @@ config.CFG.read("test/rhsm.conf")
 
 from datetime import datetime, timedelta
 
-from subscription_manager.certdirectory import EntitlementDirectory, ProductDirectory
+from subscription_manager.certdirectory import CertificateDirectory, EntitlementDirectory, ProductDirectory
 
 from rhsm.certificate import parse_tags
 from rhsm.certificate2 import EntitlementCertificate, ProductCertificate, \
@@ -274,7 +274,7 @@ class StubEntitlementCertificate(EntitlementCertificate):
         return self.valid_range.end() - warning_time < gmt
 
 
-class StubCertificateDirectory(EntitlementDirectory):
+class StubCertificateDirectory(CertificateDirectory):
     """
     Stub for mimicing behavior of an on-disk certificate directory.
     Can be used for both entitlement and product directories as needed.
@@ -293,17 +293,10 @@ class StubCertificateDirectory(EntitlementDirectory):
         self.list_called = True
         return self.certs
 
-    def _check_key(self, cert):
-        """
-        Fake filesystem access here so we don't try to read real keys.
-        """
+# FIXME: stub this so find_key_by_cert makes sense
+class StubEntitlementDirectory(StubCertificateDirectory, EntitlementDirectory):
+    def find_key_for_cert(self, cert):
         return True
-
-    def getCerts(self):
-        return self.certs
-
-# so we can use a less confusing name when we use this stub
-StubEntitlementDirectory = StubCertificateDirectory
 
 
 class StubProductDirectory(StubCertificateDirectory, ProductDirectory):

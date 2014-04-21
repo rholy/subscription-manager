@@ -29,6 +29,11 @@ _ = gettext.gettext
 
 cfg = initConfig()
 
+# FIXME: move to rhsm/certficate.
+# FIXME: make finer grained, see python-nss nss.error for example
+class KeyException(Exception):
+    pass
+
 
 class Directory(object):
 
@@ -150,6 +155,16 @@ class CertificateDirectory(Directory):
                 return c
         return None
 
+    # vaguely based on NSS find_key_by_cert
+    # TODO: make this more nss'ish, and potentially
+    #       handle being able to read certs by not keys
+    #       (for, a non root user running this)
+    def find_key_by_cert(self, cert):
+        """Find the private key for the certificate."""
+
+        # This is cert directory specific, so NotImplemented in
+        # CertificateDirectory
+        raise NotImplemented
 
 class ProductDirectory(CertificateDirectory):
 
@@ -211,16 +226,27 @@ class EntitlementDirectory(CertificateDirectory):
     def __init__(self):
         super(EntitlementDirectory, self).__init__(self.productpath())
 
-    def _check_key(self, cert):
-        """
-        If the new key file (SERIAL-key.pem) does not exist, check for
-        the old style (key.pem), and if found write it out as the new style.
+    def _convert_key_format(self, old_key_format, cert):
+        # write the key/cert out again in new style format
+        key = Key.read(old_key_path)
+        cert_writer = Writer(self)
+        cert_writer.write(key, cert)
 
-        Return false if neither is found, indicating we have no key for this
-        certificate.
+    # vaguely based on NSS find_key_by_cert
+    # TODO: make this more nss'ish, and potentially
+    #       handle being able to read certs by not keys
+    #       (for, a non root user running this)
+    def find_key_by_cert(self, cert):
+        """Find the private key for the certificate."""
+        # We know the cert path for all of our certs, so we should
+        # be able to find the corresponding key for each cert directory
+        # type.
 
-        See bz #711133.
-        """
+        # None path may make sense, but atm we don't know how to
+        # look up keys for that in a cert directory
+        if cert.path is None:
+            return None
+
         key_path = "%s/%s-key.pem" % (self.path, cert.serial)
         if not os.access(key_path, os.R_OK):
             # read key from old key path
@@ -229,13 +255,18 @@ class EntitlementDirectory(CertificateDirectory):
             # if we don't have a new style or old style key, consider the
             # cert invalid
             if not os.access(old_key_path, os.R_OK):
-                return False
+                # Key read/access exceptions could be from Key or it's db
+                raise KeyException
 
-            # write the key/cert out again in new style format
-            key = Key.read(old_key_path)
-            cert_writer = Writer(self)
-            cert_writer.write(key, cert)
-        return True
+            self._convert_key_format(old_key_path, cert)
+
+        # we could either read the key in new format, or we couldn't and we
+        # converted it. Read it.
+
+        # FIXME: need ioerror handling likely
+        #        and probably KeyReadException style exceptions
+        key = Key.read(key_path)
+        return key
 
     def list_valid(self):
         valid = []
@@ -243,7 +274,12 @@ class EntitlementDirectory(CertificateDirectory):
 
             # If something is amiss with the key for this certificate, consider
             # it invalid:
-            if not self._check_key(c):
+            try:
+                self.find_key_for_cert(c)
+            except KeyException, e:
+                log.exception(e)
+                # FIXME: which key, from where, what method, etc
+                log.debug("Attempting to read ent cert key, but failed.")
                 continue
 
             if c.is_valid():
