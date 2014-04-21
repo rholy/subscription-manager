@@ -45,13 +45,19 @@ class Directory(object):
             all_items.append(p)
         return all_items
 
-    def list(self):
+    # impl specific matcher for "list"
+    def _filename_match(self, filename):
+        """Default _filename_match matches all filenames."""
+        return True
+
+    def list_files(self):
         files = []
         for p, fn in self.list_all():
             path = self.abspath(fn)
             if Path.isdir(path):
                 continue
-            else:
+
+            if self._filename_match(fn):
                 files.append((p, fn))
         return files
 
@@ -108,13 +114,16 @@ class CertificateDirectory(Directory):
         # simply clear the cache. the next list() will reload.
         self._listing = None
 
+    def _filename_match(self, filename):
+        if not filename.endswith('.pem') or filename.endswith(self.KEY):
+            return False
+        return True
+
     def list(self):
         if self._listing is not None:
             return self._listing
         listing = []
-        for p, fn in Directory.list(self):
-            if not fn.endswith('.pem') or fn.endswith(self.KEY):
-                continue
+        for p, fn in self.list_files():
             path = self.abspath(fn)
             listing.append(create_from_file(path))
         self._listing = listing
@@ -204,6 +213,15 @@ class ProductDirectory(CertificateDirectory):
         log.debug("Installed product IDs: %s" % installed_products.keys())
         return installed_products
 
+
+class ConsumerIdentityDirectory(CertificateDirectory):
+
+    PATH = cfg.get('rhsm', 'consumerCertDir')
+
+    def _filename_match(self, filename):
+        if filename == 'cert.pem':
+            return True
+        return False
 
 class EntitlementDirectory(CertificateDirectory):
 
