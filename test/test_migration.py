@@ -888,8 +888,7 @@ class TestMigration(fixture.SubManFixture):
             self.fail("No exception raised")
 
     @patch("subprocess.call")
-    @patch.object(identity.ConsumerIdentity, "read")
-    def test_register(self, mock_read, mock_subprocess):
+    def test_register(self, mock_subprocess):
         self.engine.options = self.create_options({'serverurl': 'foobar'})
 
         credentials = MagicMock()
@@ -897,7 +896,6 @@ class TestMigration(fixture.SubManFixture):
         credentials.password = "bar"
 
         mock_subprocess.return_value = 0
-        mock_read.return_value = MagicMock()
         self.engine.register(credentials, "org", "env")
 
         arg_list = ['subscription-manager',
