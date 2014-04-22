@@ -45,15 +45,13 @@ class CPProvider(object):
                 host=None,
                 ssl_port=None,
                 handler=None,
-                cert_file=None,
-                key_file=None,
+                auth_info=None,
                 proxy_hostname_arg=None,
                 proxy_port_arg=None,
                 proxy_user_arg=None,
                 proxy_password_arg=None):
 
-        self.cert_file = ConsumerIdentity.certpath()
-        self.key_file = ConsumerIdentity.keypath()
+        self.auth_info = auth_info
 
         # only use what was passed in, let the lowest level deal with
         # no values and look elsewhere for them.
@@ -87,12 +85,17 @@ class CPProvider(object):
 
     def get_consumer_auth_cp(self):
         if not self.consumer_auth_cp:
+            # FIXME: make UEPConnection understand auth objects
+            id_cert = auth_info.identity_cert
+            id_dir = inj.require(inj.ID_DIR)
+            # lookup key at last possible moment, should be later
+            key = id_dir.find_key_by_cert(id_cert)
             self.consumer_auth_cp = connection.UEPConnection(
                     proxy_hostname=self.proxy_hostname,
                     proxy_port=self.proxy_port,
                     proxy_user=self.proxy_user,
                     proxy_password=self.proxy_password,
-                    cert_file=self.cert_file, key_file=self.key_file)
+                    cert_file=id_cert.path, key_file=key.path)
         return self.consumer_auth_cp
 
     def get_basic_auth_cp(self):

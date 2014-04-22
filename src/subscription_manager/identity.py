@@ -19,106 +19,67 @@ import os
 from rhsm.certificate import create_from_pem
 from rhsm.config import initConfig
 from subscription_manager.certdirectory import Path
+from subscription_manager import injection as inj
 
 CFG = initConfig()
 
 log = logging.getLogger('rhsm-app.' + __name__)
 
+# ConsumerIdentity has an IdentityDataSource
+# IdentityDataSource can have-a IdentityCertDirectory
+# IdentityCertDirectory
+# identity.ConsumerIdentity is a ConsumerIdenti
+# identity.Identity is _the_ identity
+#
+# For now, we will inject an identity_dir
 
-class ConsumerIdentity:
-    """Consumer info and certificate information.
+# an interface/abc would look like
+# Only the bits that set up authentication for the connection
+#  need to care what this object is. Otherwise it should be opaque.
 
-    Includes helpers for reading/writing consumer identity certificates
-    from disk."""
+class ConsumerIdentityAuth(object):
+    """Consumer identity authentication class, passed where consumer identity
+    information is needed for authentication."""
+    pass
 
-    PATH = CFG.get('rhsm', 'consumerCertDir')
-    KEY = 'key.pem'
-    CERT = 'cert.pem'
 
-    @classmethod
-    def keypath(cls):
-        return Path.join(cls.PATH, cls.KEY)
-
-    @classmethod
-    def certpath(cls):
-        return Path.join(cls.PATH, cls.CERT)
-
-    @classmethod
-    def read(cls):
-        f = open(cls.keypath())
-        key = f.read()
-        f.close()
-        f = open(cls.certpath())
-        cert = f.read()
-        f.close()
-        return ConsumerIdentity(key, cert)
-
-    @classmethod
-    def exists(cls):
-        return (os.path.exists(cls.keypath()) and
-                os.path.exists(cls.certpath()))
-
-    @classmethod
-    def existsAndValid(cls):
-        if cls.exists():
-            try:
-                cls.read()
-                return True
-            except Exception, e:
-                log.warn('possible certificate corruption')
-                log.error(e)
-        return False
-
-    def __init__(self, keystring, certstring):
-        self.key = keystring
-        # TODO: bad variables, cert should be the certificate object, x509 is
-        # used elsewhere for the m2crypto object of the same name.
-        self.cert = certstring
-        self.x509 = create_from_pem(certstring)
+# Note this class is not expected to automatically reflect
+#  ID_DIR changes. identity.Identity should handle that.
+# This is a cert token, created from an id cert. Not an id cert itself.
+class ConsumerIdentityCertBasedAuth(object):
+    def __init__(self, identity_cert):
+        self.identity_cert = identity_cert
 
     def getConsumerId(self):
-        subject = self.x509.subject
+        subject = self.identity_cert.x509.subject
         return subject.get('CN')
 
     def getConsumerName(self):
-        altName = self.x509.alt_name
+        altName = self.identity_cert.x509.alt_name
         return altName.replace("DirName:/CN=", "")
 
     def getSerialNumber(self):
-        return self.x509.serial
-
-    # TODO: we're using a Certificate which has it's own write/delete, no idea
-    # why this landed in a parallel disjoint class wrapping the actual cert.
-    def write(self):
-        from subscription_manager import managerlib
-        self.__mkdir()
-        f = open(self.keypath(), 'w')
-        f.write(self.key)
-        f.close()
-        os.chmod(self.keypath(), managerlib.ID_CERT_PERMS)
-        f = open(self.certpath(), 'w')
-        f.write(self.cert)
-        f.close()
-        os.chmod(self.certpath(), managerlib.ID_CERT_PERMS)
-
-    def delete(self):
-        path = self.keypath()
-        if os.path.exists(path):
-            os.unlink(path)
-        path = self.certpath()
-        if os.path.exists(path):
-            os.unlink(path)
-
-    def __mkdir(self):
-        path = Path.abs(self.PATH)
-        if not os.path.exists(path):
-            os.mkdir(path)
+        return self.identity_cert.x509.serial
 
     def __str__(self):
-        return 'consumer: name="%s", uuid=%s' % \
+        return 'consumer id cert auth: name="%s", uuid=%s' % \
             (self.getConsumerName(),
              self.getConsumerId())
 
+# Identity wraps ConsumerIdentity, and provides info specific
+# to subman needs.
+#
+# ConsumerIdentityAuth is sort of a auth token
+# Identity is a wrapper that knows info about the consumer
+#
+# Identity has a ConsumerIdentityAuth, and knows how to get/reset one
+# Identity also has the consumer uuid  (needed for RHSM api)
+# Identity also has the consumer name (for UI)
+#
+#
+# atm, Identity.consumer == auth object
+#   That may change to say, Identity.auth, on the assumption it could
+#   be OAuth token, or a key/pair identifier to a pkcs#11 module
 
 class Identity(object):
     """Wrapper for sharing consumer identity without constant reloading."""
@@ -129,12 +90,14 @@ class Identity(object):
         """Check for consumer certificate on disk and update our info accordingly."""
         log.debug("Loading consumer info from identity certificates.")
         try:
-            # uh, weird
-            # FIXME: seems weird to wrap this stuff
-            self.consumer = self._get_consumer_identity()
-            self.name = self.consumer.getConsumerName()
-            self.uuid = self.consumer.getConsumerId()
-
+            # Populate this instance of Identity with info from ID_DIR
+            # (in this particular impl, via a ConsumerIdentityCertBaseAuth
+            # created from a certificate2.IdentityCertificate that we load
+            # from ID_DIR
+            self.id_dir = inj.require(inj.ID_DIR)
+            self.auth = self._get_consumer_identity_auth()
+            self.name = self.auth.getConsumerName()
+            self.uuid = self.auth.getConsumerId()
         # XXX shouldn't catch the global exception here, but that's what
         # existsAndValid did, so this is better.
         except Exception, e:
@@ -145,25 +108,28 @@ class Identity(object):
             self.name = None
             self.uuid = None
 
-    def _get_consumer_identity(self):
+    def _get_consumer_identity_auth(self):
+        id_dir = inj.require(inj.ID_DIR)
         # FIXME: wrap in exceptions, catch IOErrors etc, raise anything else
-        return ConsumerIdentity.read()
+        id_cert = id_dir.get_default_id_cert()
+        consumer_identity_auth = ConsumerIdentityCertBasedAuth(id_cert)
+        return consumer_identity_auth
 
     # this name is weird, since Certificate.is_valid actually checks the data
     # and this is a thin wrapper
     def is_valid(self):
         return self.uuid is not None
 
+    # FIXME: ugly names
     def getConsumerName(self):
         return self.name
 
     def getConsumerId(self):
         return self.uuid
 
-    # getConsumer is kind of vague, and this is just here to
-    # the cert object
+    # FIXME: identity may not be cert based in future
     def getConsumerCert(self):
-        return self.consumer
+        return self.auth.id_cert
 
     def __str__(self):
         return "<%s, name=%s, uuid=%s, consumer=%s>" % \

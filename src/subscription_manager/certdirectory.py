@@ -166,6 +166,23 @@ class CertificateDirectory(Directory):
         # CertificateDirectory
         raise NotImplemented
 
+
+# FIXME: product/ent/id dirs do not need to be "directory" based apis
+#        The default version of an Entitlements database object would
+#        have a CertDirectory, but it doesn't need to be a subclass.
+#
+#        That would let tests mock out just the Directory objects, and
+#        test TheObjectsCurrentlyKnownAsEntitlementDirectory be tested without
+#        filesystem access
+#
+#        The directory based classes could also have a file/dir change
+#        notifier, replacing the ones used in cert sorter.
+#
+#        The Entitlements db object could/would sync itself based on
+#        either file change notification (cert dropped in out of band)
+#        or explicitily (a refresh() or a init of an object)
+#
+#
 class ProductDirectory(CertificateDirectory):
 
     PATH = cfg.get('rhsm', 'productCertDir')
@@ -205,14 +222,38 @@ class ProductDirectory(CertificateDirectory):
     findByProduct = find_by_product
 
 
-class ConsumerIdentityDirectory(CertificateDirectory):
+class IdentityDirectory(CertificateDirectory):
 
     PATH = cfg.get('rhsm', 'consumerCertDir')
+    CERT_FILENAME = "cert.pem"
+    KEY_FILENAME = "key.pem"
 
     def _filename_match(self, filename):
-        if filename == 'cert.pem':
+        if filename == self.CERT_FILENAME:
             return True
         return False
+
+    def find_key_by_cert(self, cert):
+        # TODO: atm, there is only one identity, so
+        # we just return that key
+        # self.path includes ROOT prefix
+        key_path = os.path.join(self.path, self.KEY_FILENAME)
+        key = Key.read(key_path)
+        return key
+
+    def get_default_id_cert(self):
+        # TODO: only one id atm
+        # TODO: api would need to learn to request a specific consumer uuid
+        all_certs = self.list()
+
+        # Only one cert expected
+        return all_certs[0]
+
+    def get_id_cert_by_uuid(self, uuid):
+        # load all certs, look through them to find matching uuid, return
+        # IdentityCert. Maybe useful for virt-who scenarios?
+        raise NotImplemented
+
 
 class EntitlementDirectory(CertificateDirectory):
 

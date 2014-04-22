@@ -21,6 +21,7 @@ from subscription_manager.cache import ProductStatusCache, EntitlementStatusCach
 from subscription_manager.cert_sorter import CertSorter
 from subscription_manager.certdirectory import EntitlementDirectory
 from subscription_manager.certdirectory import ProductDirectory
+from subscription_manager.certdirectory import IdentityDirectory
 from subscription_manager.facts import Facts
 from subscription_manager.identity import Identity
 from subscription_manager.validity import ValidProductDateRangeCalculator
@@ -45,6 +46,7 @@ def init_dep_injection():
 
     inj.provide(inj.ENT_DIR, EntitlementDirectory, singleton=True)
     inj.provide(inj.PROD_DIR, ProductDirectory, singleton=True)
+    inj.provide(inj.ID_DIR, IdentityDirectory, singleton=True)
 
     inj.provide(inj.ENTITLEMENT_STATUS_CACHE, EntitlementStatusCache, singleton=True)
     inj.provide(inj.PROD_STATUS_CACHE, ProductStatusCache, singleton=True)
