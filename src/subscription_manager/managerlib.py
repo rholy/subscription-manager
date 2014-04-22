@@ -58,12 +58,19 @@ def persist_consumer_cert(consumerinfo):
     """
      Calls the consumerIdentity, persists and gets consumer info
     """
-    id_dir = inj.require(inj.ID_DIR)
+    id_dir = require(ID_DIR)
     # unsure if this could be injected?
     id_dir.add_id_cert_key_pair_from_bufs(consumerinfo['idCert']['key'],
                                           consumerinfo['idCert']['cert'])
+
+    # get the fresh consumer identity and log it.
+    consumer_identity = require(IDENTITY)
+    consumer_info = {"consumer_name": consumer_identity.getConsumerName(),
+                     "uuid": consumer_identity.getConsumerId()}
+
     log.info("Consumer created: %s" % consumer_info)
-    system_log("Registered system with identity: %s" % consumer.getConsumerId())
+
+    system_log("Registered system with identity: %s" % consumer_identity.getConsumerId())
     return consumer_info
 
 

@@ -62,30 +62,29 @@ class IdentityUpdateAction(object):
 
     def _update_cert(self, identity):
 
-        # to avoid circular imports
-        # FIXME: move persist stuff here
-        from subscription_manager import managerlib
+        id_dir = inj.require(inj.ID_DIR)
+        id_cert = id_dir.get_default_id_cert()
 
-        # FIXME: move to using ID_DIR
-        idcert = identity.getConsumerCert()
-
-        consumer = self._get_consumer(identity)
+        # fetch the latest consumer info, include cert
+        consumer_info = self._get_consumer(identity)
 
         # only write the cert if the serial has changed
-        # FIXME: this would be a good place to have a Consumer/ConsumerCert
-        # model.
-        # FIXME: and this would be a ConsumerCert model '!='
-        if idcert.getSerialNumber() != consumer['idCert']['serial']['serial']:
+        if id_cert.getSerialNumber() != consumer_info['idCert']['serial']['serial']:
             log.debug('identity certificate changed, writing new one')
 
-            # FIXME: should be in this module? managerlib is an odd place
-            managerlib.persist_consumer_cert(consumer)
+            # add and persist
+            id_dir.add_id_cert_key_pair_from_bufs(consumer_info['idCert']['key'],
+                                                  consumer_info['idCert']['cert'])
 
+        # FIXME: use different status to indicate a new id cert
         # updated the cert, or at least checked
         self.report._status = 1
         return self.report
 
     def _get_consumer(self, identity):
         # FIXME: not much for error handling here
+        #
+        # If the cp supports it, we could specify a filter here to get
+        # just the cert info
         consumer = self.uep.getConsumer(identity.uuid)
         return consumer

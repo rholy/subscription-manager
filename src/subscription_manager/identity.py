@@ -40,16 +40,19 @@ log = logging.getLogger('rhsm-app.' + __name__)
 class ConsumerIdentityAuth(object):
     """Consumer identity authentication class, passed where consumer identity
     information is needed for authentication."""
-    pass
+    uuid = None
+    name = None
 
 
 # Note this class is not expected to automatically reflect
 #  ID_DIR changes. identity.Identity should handle that.
 # This is a cert token, created from an id cert. Not an id cert itself.
-class ConsumerIdentityCertBasedAuth(object):
+class IdentityCertConsumerIdentityAuth(object):
+    """ConsumerIdentityAuth based on consumer identity certificates."""
     def __init__(self, identity_cert):
         self.identity_cert = identity_cert
 
+    # FIXME: replace with properties
     def getConsumerId(self):
         subject = self.identity_cert.x509.subject
         return subject.get('CN')
@@ -66,6 +69,7 @@ class ConsumerIdentityCertBasedAuth(object):
             (self.getConsumerName(),
              self.getConsumerId())
 
+
 # Identity wraps ConsumerIdentity, and provides info specific
 # to subman needs.
 #
@@ -81,6 +85,8 @@ class ConsumerIdentityCertBasedAuth(object):
 #   That may change to say, Identity.auth, on the assumption it could
 #   be OAuth token, or a key/pair identifier to a pkcs#11 module
 
+# we inject an Identity. At the moment, this is the only implementation.
+# This would be a nice place to have an abstract base class
 class Identity(object):
     """Wrapper for sharing consumer identity without constant reloading."""
     def __init__(self):
@@ -90,12 +96,9 @@ class Identity(object):
         """Check for consumer certificate on disk and update our info accordingly."""
         log.debug("Loading consumer info from identity certificates.")
         try:
-            # Populate this instance of Identity with info from ID_DIR
-            # (in this particular impl, via a ConsumerIdentityCertBaseAuth
-            # created from a certificate2.IdentityCertificate that we load
-            # from ID_DIR
-            self.id_dir = inj.require(inj.ID_DIR)
             self.auth = self._get_consumer_identity_auth()
+
+            # FIXME: replace with properties
             self.name = self.auth.getConsumerName()
             self.uuid = self.auth.getConsumerId()
         # XXX shouldn't catch the global exception here, but that's what
@@ -109,10 +112,14 @@ class Identity(object):
             self.uuid = None
 
     def _get_consumer_identity_auth(self):
+        # Populate this instance of Identity with info from ID_DIR
+        # (in this particular impl, via a IdentityCertConsumerIdentityAuth
+        # created from a certificate2.IdentityCertificate that we load
+        # from ID_DIR
         id_dir = inj.require(inj.ID_DIR)
         # FIXME: wrap in exceptions, catch IOErrors etc, raise anything else
         id_cert = id_dir.get_default_id_cert()
-        consumer_identity_auth = ConsumerIdentityCertBasedAuth(id_cert)
+        consumer_identity_auth = IdentityCertConsumerIdentityAuth(id_cert)
         return consumer_identity_auth
 
     # this name is weird, since Certificate.is_valid actually checks the data
@@ -121,6 +128,7 @@ class Identity(object):
         return self.uuid is not None
 
     # FIXME: ugly names
+    # FIXME: the only thing that uses this is the cli 'identity' command.
     def getConsumerName(self):
         return self.name
 
@@ -129,7 +137,7 @@ class Identity(object):
 
     # FIXME: identity may not be cert based in future
     def getConsumerCert(self):
-        return self.auth.id_cert
+        return self.auth.identity_cert
 
     def __str__(self):
         return "<%s, name=%s, uuid=%s, consumer=%s>" % \

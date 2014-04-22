@@ -22,10 +22,12 @@ from subscription_manager import injection as inj
 CONSUMER_DATA = {'releaseVer': {'id': 1, 'releaseVer': '123123'},
                  'serviceLevel': "Pro Turbo HD Plus Ultra",
                  'owner': {'key': 'admin'},
-                 'idCert': {'serial': {'serial': 3787455826750723380}}}
+                 'idCert': {'serial': {'serial': 3787455826750723380},
+                            'key': 'CONSUMER_DATA_STUB_PRIVATE_KEY',
+                            'cert': 'CONSUMER_DATA_STUB_CERTIFICATE_INFORMATION'}}
 
 
-mock_consumer_identity = mock.Mock(spec=identity.ConsumerIdentity)
+mock_consumer_identity = mock.Mock(spec=identity.IdentityCertConsumerIdentityAuth)
 mock_consumer_identity.getSerialNumber.return_value = 3787455826750723380
 mock_consumer_identity.getConsumerName.return_value = "Mock Consumer Identity"
 mock_consumer_identity.getConsumerId.return_value = "11111-00000-11111-0000"
@@ -47,7 +49,7 @@ class ValidIdentity(StubIdentity):
     _consumer = mock_consumer_identity
 
 
-different_mock_consumer_identity = mock.Mock(spec=identity.ConsumerIdentity)
+different_mock_consumer_identity = mock.Mock(spec=identity.IdentityCertConsumerIdentityAuth)
 different_mock_consumer_identity.getSerialNumber.return_value = 123123123123
 different_mock_consumer_identity.getConsumerName.return_value = "A Different Mock Consumer Identity"
 different_mock_consumer_identity.getConsumerId.return_value = "AAAAAA-BBBBB-CCCCCC-DDDDD"
@@ -67,24 +69,27 @@ class TestIdentityUpdateAction(fixture.SubManFixture):
 
         self.set_consumer_auth_cp(mock_uep)
 
-    @mock.patch("subscription_manager.managerlib.persist_consumer_cert")
-    def test_idcertlib_persists_cert(self, mock_persist):
+    def test_idcertlib_persists_cert(self):
         id_update_action = identitycertlib.IdentityUpdateAction()
 
-        inj.provide(inj.IDENTITY, DifferentValidConsumerIdentity())
+        mock_valid_id = DifferentValidConsumerIdentity()
+        inj.provide(inj.IDENTITY, mock_valid_id)
         id_update_action.perform()
-        mock_persist.assert_called_once_with(CONSUMER_DATA)
 
-    @mock.patch("subscription_manager.managerlib.persist_consumer_cert")
-    def test_idcertlib_noops_when_serialnum_is_same(self, mock_persist):
+        # there is no cert data in the mocks, so can't look for it
+        self.assertTrue(mock_valid_id.write.called)
+        self.assertTrue(self.id_dir.add.called)
+
+    def test_idcertlib_noops_when_serialnum_is_same(self):
         id_update_action = identitycertlib.IdentityUpdateAction()
         #certlib.ConsumerIdentity = stubs.StubConsumerIdentity
         #certlib.ConsumerIdentity.getSerialNumber = getSerialNumber
 
-        inj.provide(inj.IDENTITY, InvalidIdentity())
+        mock_invalid_id = InvalidIdentity()
+        inj.provide(inj.IDENTITY, mock_invalid_id)
 
         id_update_action.perform()
-        self.assertFalse(mock_persist.called)
+        self.assertFalse(mock_invalid_id.write.called)
 
     def test_idcertlib_no_id_cert(self):
         inj.provide(inj.IDENTITY, InvalidIdentity())
@@ -102,9 +107,8 @@ class TestIdentityCertLib(fixture.SubManFixture):
 
         self.set_consumer_auth_cp(mock_uep)
 
-    @mock.patch("subscription_manager.managerlib.persist_consumer_cert")
-    def test(self, mock_persist):
+    def test(self):
         id_cert_lib = identitycertlib.IdentityCertLib()
         report = id_cert_lib.update()
         self.assertEquals(report._status, 1)
-        self.assertTrue(mock_persist.called)
+        self.assertTrue(self.id_dir.add_id_cert_key_pair_from_bufs.called)
