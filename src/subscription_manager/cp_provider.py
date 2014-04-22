@@ -12,9 +12,8 @@
 # in this software or its documentation.
 #
 
-from subscription_manager.identity import ConsumerIdentity
 import rhsm.connection as connection
-
+from subscription_manager import injection as inj
 
 class CPProvider(object):
     """
@@ -86,7 +85,7 @@ class CPProvider(object):
     def get_consumer_auth_cp(self):
         if not self.consumer_auth_cp:
             # FIXME: make UEPConnection understand auth objects
-            id_cert = auth_info.identity_cert
+            id_cert = self.auth_info.identity_cert
             id_dir = inj.require(inj.ID_DIR)
             # lookup key at last possible moment, should be later
             key = id_dir.find_key_by_cert(id_cert)

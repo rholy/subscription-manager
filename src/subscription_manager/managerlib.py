@@ -20,7 +20,6 @@ import logging
 import os
 import re
 import shutil
-import stat
 import syslog
 
 from rhsm.config import initConfig
@@ -28,19 +27,17 @@ from rhsm.certificate import Key, CertificateException, create_from_pem
 
 import subscription_manager.cache as cache
 from subscription_manager.cert_sorter import StackingGroupSorter, ComplianceManager
-from subscription_manager import identity
 from subscription_manager.facts import Facts
 from subscription_manager.injection import require, CERT_SORTER, \
         PRODUCT_DATE_RANGE_CALCULATOR, IDENTITY, ENTITLEMENT_STATUS_CACHE, \
         PROD_STATUS_CACHE, ENT_DIR, PROD_DIR, CP_PROVIDER, OVERRIDE_STATUS_CACHE, \
-        POOLTYPE_CACHE
+        POOLTYPE_CACHE, ID_DIR
 from subscription_manager import isodate
 from subscription_manager.jsonwrapper import PoolWrapper
 from subscription_manager.repolib import RepoLib
 from subscription_manager import utils
 
 # FIXME FIXME
-from subscription_manager.identity import ConsumerIdentity
 from dateutil.tz import tzlocal
 
 log = logging.getLogger('rhsm-app.' + __name__)
@@ -50,8 +47,6 @@ _ = gettext.gettext
 cfg = initConfig()
 ENT_CONFIG_DIR = cfg.get('rhsm', 'entitlementCertDir')
 
-# Expected permissions for identity certificates:
-ID_CERT_PERMS = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP
 
 
 def system_log(message, priority=syslog.LOG_NOTICE):
@@ -63,15 +58,10 @@ def persist_consumer_cert(consumerinfo):
     """
      Calls the consumerIdentity, persists and gets consumer info
     """
-    cert_dir = cfg.get('rhsm', 'consumerCertDir')
-    if not os.path.isdir(cert_dir):
-        os.mkdir(cert_dir)
+    id_dir = inj.require(inj.ID_DIR)
     # unsure if this could be injected?
-    consumer = identity.ConsumerIdentity(consumerinfo['idCert']['key'],
-                                         consumerinfo['idCert']['cert'])
-    consumer.write()
-    consumer_info = {"consumer_name": consumer.getConsumerName(),
-                     "uuid": consumer.getConsumerId()}
+    id_dir.add_id_cert_key_pair_from_bufs(consumerinfo['idCert']['key'],
+                                          consumerinfo['idCert']['cert'])
     log.info("Consumer created: %s" % consumer_info)
     system_log("Registered system with identity: %s" % consumer.getConsumerId())
     return consumer_info
@@ -804,27 +794,6 @@ def unregister(uep, consumer_uuid):
     clean_all_data(backup=False)
 
 
-# FIXME: move me to identity.py
-def check_identity_cert_perms():
-    """
-    Ensure the identity certs on this system have the correct permissions, and
-    fix them if not.
-    """
-    certs = [identity.ConsumerIdentity.keypath(), identity.ConsumerIdentity.certpath()]
-    for cert in certs:
-        if not os.path.exists(cert):
-            # Only relevant if these files exist.
-            continue
-        statinfo = os.stat(cert)
-        if statinfo[stat.ST_UID] != 0 or statinfo[stat.ST_GID] != 0:
-            os.chown(cert, 0, 0)
-            log.warn("Corrected incorrect ownership of %s." % cert)
-
-        mode = stat.S_IMODE(statinfo[stat.ST_MODE])
-        if mode != ID_CERT_PERMS:
-            os.chmod(cert, ID_CERT_PERMS)
-            log.warn("Corrected incorrect permissions on %s." % cert)
-
 
 def clean_all_data(backup=True):
     consumer_dir = cfg.get('rhsm', 'consumerCertDir')
@@ -841,12 +810,9 @@ def clean_all_data(backup=True):
         log.info("Backing up %s to %s." % (consumer_dir, consumer_dir_backup))
         shutil.copytree(consumer_dir, consumer_dir_backup)
 
-# FIXME FIXME
-    # Delete current consumer certs:
-    for path in [ConsumerIdentity.keypath(), ConsumerIdentity.certpath()]:
-        if (os.path.exists(path)):
-            log.debug("Removing identity cert: %s" % path)
-            os.remove(path)
+    # Ask the identity directory to remove the id cert and key
+    id_dir = require(ID_DIR)
+    id_dir.delete_default_id()
 
     require(IDENTITY).reload()
 

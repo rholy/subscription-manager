@@ -2398,7 +2398,7 @@ class ManagerCLI(CLI):
         CLI.__init__(self, command_classes=commands)
 
     def main(self):
-        managerlib.check_identity_cert_perms()
+        #managerlib.check_identity_cert_perms()
         return CLI.main(self)
 
 

@@ -18,8 +18,9 @@
 import gettext
 import logging
 import os
+import stat
 
-from rhsm.certificate import Key, create_from_file
+from rhsm.certificate import Key, create_from_file, create_from_pem
 from rhsm.config import initConfig
 from subscription_manager.injection import require, ENT_DIR
 
@@ -40,6 +41,8 @@ class Directory(object):
     def __init__(self, path):
         self.path = Path.abs(path)
 
+    # FIXME: some path weirdness here. Why does this
+    #        not use
     def list_all(self):
         all_items = []
         if not os.path.exists(self.path):
@@ -110,6 +113,11 @@ class CertificateDirectory(Directory):
 
     KEY = 'key.pem'
 
+    # default expected cert permisions
+    CERT_OWNER_UID = 0  # root
+    CERT_GROUP_GID = 0
+    CERT_PERMS = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP
+
     def __init__(self, path):
         super(CertificateDirectory, self).__init__(path)
         self.create()
@@ -148,6 +156,24 @@ class CertificateDirectory(Directory):
                 expired.append(c)
         return expired
 
+    def add_cert(self, cert):
+        """Add Certificate to directory, persist it, and refresh CertificateDirectory."""
+        cert.write()
+        log.debug("Added cert %s to %s and saved it" % (cert, self))
+        # refresh here or leave that up to caller?
+        self.refresh()
+
+    def add_key(self, key):
+        "Add Key to directory, persist it, and fresh CertificateDirectory."""
+        key.write()
+        log.debug("Added key %s to %s and saved it" % (key, self))
+        self.refresh()
+
+    def add(self, cert, key):
+        "Add Certificate cert, and Key key to CertificateDirectory, persist them, and refresh."""
+        self.add_cert(cert)
+        self.add_key(key)
+
     def find(self, sn):
         # TODO: could optimize to just load SERIAL.pem? Maybe not in all cases.
         for c in self.list():
@@ -165,6 +191,33 @@ class CertificateDirectory(Directory):
         # This is cert directory specific, so NotImplemented in
         # CertificateDirectory
         raise NotImplemented
+
+    def _check_cert_perms(self, filename):
+        # doesn't exist. We could race between listdir and here.
+
+        # FIXME: ditch entirely, or add a PermFixer we can mock
+        if not os.path.exists(filename):
+            return
+
+        statinfo = os.stat(filename)
+
+        if statinfo[stat.ST_UID] != self.CERT_OWNER or statinfo[stat.ST_GID] != self.CERT_GROUP:
+            #os.chown(filename, self.CERT_OWNER, self.CERT_GROUP)
+            log.warn("Detected incorrect ownership of %s." % filename)
+
+        mode = stat.S_IMODE(statinfo[stat.ST_MODE])
+        if mode != self.CERT_PERMS:
+            #os.chmod(filename, self.CERT_PERMS)
+            log.warn("Detected incorrect permissions on %s." % filename)
+
+    # NOTE: Directory.create() currently will create the dir if it
+    # doesn't exist
+    def check_perms(self):
+        for p, fn in self.list_files():
+            # if we get here, the dir exists and had something in it.
+            # do we need to check existsistence/perms of dir earlier?
+            self._check_cert_perms(fn)
+
 
 
 # FIXME: product/ent/id dirs do not need to be "directory" based apis
@@ -249,10 +302,25 @@ class IdentityDirectory(CertificateDirectory):
         # Only one cert expected
         return all_certs[0]
 
+    def delete_default_id(self):
+        id_cert = self.get_default_id_cert()
+        key = self.find_key_by_cert(id_cert)
+
+        log.info("Deleting default consumer identity certificate: %s and key: %s." % (id_cert.path, key.path))
+        # TODO: likely needs exception handling
+        id_cert.delete()
+        key.delete()
+
     def get_id_cert_by_uuid(self, uuid):
         # load all certs, look through them to find matching uuid, return
         # IdentityCert. Maybe useful for virt-who scenarios?
         raise NotImplemented
+
+    def add_id_cert_key_pair_from_bufs(self, cert_buf, key_buf):
+        """Create id cert and key, and save them to disk."""
+        id_cert = create_from_pem(cert_buf)
+        id_key = Key(key_buf)
+        self.add(id_cert, id_key)
 
 
 class EntitlementDirectory(CertificateDirectory):
@@ -267,7 +335,7 @@ class EntitlementDirectory(CertificateDirectory):
     def __init__(self):
         super(EntitlementDirectory, self).__init__(self.productpath())
 
-    def _convert_key_format(self, old_key_format, cert):
+    def _convert_key_format(self, old_key_path, cert):
         # write the key/cert out again in new style format
         key = Key.read(old_key_path)
         cert_writer = Writer(self)

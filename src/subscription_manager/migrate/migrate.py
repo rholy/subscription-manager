@@ -41,7 +41,6 @@ if _LIBPATH not in sys.path:
     sys.path.append(_LIBPATH)
 
 from subscription_manager import injection as inj
-from subscription_manager.identity import ConsumerIdentity
 from subscription_manager.cli import system_exit
 from subscription_manager.i18n_optparse import OptionParser, \
         USAGE, WrappedIndentedHelpFormatter
@@ -263,9 +262,6 @@ class MigrationEngine(object):
         self.cp_provider = inj.require(inj.CP_PROVIDER)
 
         connection_info = self._get_connection_info()
-
-        connection_info['cert_file'] = ConsumerIdentity.certpath()
-        connection_info['key_file'] = ConsumerIdentity.keypath()
 
         self.cp_provider.set_connection_info(**connection_info)
 

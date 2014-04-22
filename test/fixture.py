@@ -85,6 +85,14 @@ class SubManFixture(unittest.TestCase):
         self.prod_dir = stubs.StubProductDirectory()
         inj.provide(inj.PROD_DIR, self.prod_dir)
 
+        # we currently inject IDENTITY as well as ID_DIR.
+        # We probably only need to inject ID_DIR, if it's a mock that returns
+        # mock ID
+
+        # let's try using a mock here
+        self.id_dir = Mock(name='IdentityDirectoryMock')
+        inj.provide(inj.ID_DIR, self.id_dir)
+
         # Installed products manager needs PROD_DIR injected first
         inj.provide(inj.INSTALLED_PRODUCTS_MANAGER, stubs.StubInstalledProductsManager())
 
