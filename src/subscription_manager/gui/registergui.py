@@ -349,7 +349,8 @@ class PerformRegisterScreen(NoGuiScreen):
 
         try:
             set_state(SUBSCRIBING)
-            managerlib.persist_consumer_cert(new_account)
+            consumer_identity = require(IDENTITY)
+            consumer_identity.update(new_account)
             self._parent.backend.cs.force_cert_check()  # Ensure there isn't much wait time
 
             if self._parent.activation_keys:
@@ -1051,8 +1052,9 @@ class AsyncBackend(object):
             # when we are working with activation keys.  See BZ #888790.
             if not self.backend.cp_provider.get_basic_auth_cp().username and \
                 not self.backend.cp_provider.get_basic_auth_cp().password:
-                # Write the identity cert to disk
-                managerlib.persist_consumer_cert(retval)
+
+                consumer_identity = require(IDENTITY)
+                consumer_identity.update(retval)
                 self.backend.update()
                 cp = self.backend.cp_provider.get_consumer_auth_cp()
 

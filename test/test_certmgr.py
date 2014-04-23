@@ -71,9 +71,6 @@ class CertManagerTestBase(SubManFixture):
         self.patcher3 = mock.patch.object(repolib.RepoUpdateAction, 'perform')
         self.repolib_updateaction_perform = self.patcher3.start()
 
-        self.patcher6 = mock.patch('subscription_manager.managerlib.persist_consumer_cert')
-        self.managerlib_persist_consumer_cert = self.patcher6.start()
-
         # mock out all hardware fetching... we may need to fake socket counts
         self.hwprobe_getall_patcher = mock.patch.object(hwprobe.Hardware, 'get_all')
         self.hwprobe_getall_mock = self.hwprobe_getall_patcher.start()

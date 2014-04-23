@@ -622,12 +622,9 @@ class IdentityCommand(UserPassCommand):
                     # get an UEP with basic auth
                     self.cp_provider.set_user_pass(self.username, self.password)
                     self.cp = self.cp_provider.get_basic_auth_cp()
-                consumer = self.cp.regenIdCertificate(consumerid)
-                managerlib.persist_consumer_cert(consumer)
 
-                # do this in persist_consumer_cert? or some other
-                # high level, "I just registered" thing
-                self.identity.reload()
+                consumer_info = self.cp.regenIdCertificate(consumerid)
+                self.identity.update(consumer_info)
 
                 print _("Identity certificate has been regenerated.")
 
@@ -1052,16 +1049,18 @@ class RegisterCommand(UserPassCommand):
         except Exception, e:
             handle_exception(_("Error during registration: %s") % e, e)
 
-        consumer_info = self._persist_identity_cert(consumer)
+        self.identity.update(consumer)
 
         # We have new credentials, restart virt-who
         restart_virt_who()
 
-        print (_("The system has been registered with ID: %s ")) % (consumer_info["uuid"])
+        print (_("The system has been registered with ID: %s ")) % (self.identity.uuid)
 
         # get a new UEP as the consumer
         self.cp = self.cp_provider.get_consumer_auth_cp()
 
+        # FIXME: we should be able to skip this reload, the identity.update
+        # will do it. -akl
         # Reload the consumer identity:
         self.identity.reload()
 
@@ -1073,26 +1072,26 @@ class RegisterCommand(UserPassCommand):
         # Must update facts to clear out the old ones:
         if self.options.consumerid:
             log.info("Updating facts")
-            facts.update_check(self.cp, consumer['uuid'], force=True)
+            facts.update_check(self.cp, self.identity.uuid, force=True)
 
         profile_mgr = inj.require(inj.PROFILE_MANAGER)
         # 767265: always force an upload of the packages when registering
-        profile_mgr.update_check(self.cp, consumer['uuid'], True)
+        profile_mgr.update_check(self.cp, self.identity.uuid, True)
 
         # Facts and installed products went out with the registration request,
         # manually write caches to disk:
         facts.write_cache()
-        self.installed_mgr.update_check(self.cp, consumer['uuid'])
+        self.installed_mgr.update_check(self.cp, self.identity.uuid)
 
         if self.options.release:
             # TODO: grab the list of valid options, and check
-            self.cp.updateConsumer(consumer['uuid'], release=self.options.release)
+            self.cp.updateConsumer(self.identity.uuid, release=self.options.release)
 
         if self.autoattach:
             if 'serviceLevel' not in consumer and self.options.service_level:
                 system_exit(-1, _("Error: The --servicelevel option is not supported "
                                  "by the server. Did not complete your request."))
-            autosubscribe(self.cp, consumer['uuid'],
+            autosubscribe(self.cp, self.identity.uuid,
                     service_level=self.options.service_level)
 
         subscribed = 0
@@ -1111,13 +1110,6 @@ class RegisterCommand(UserPassCommand):
 
         self._request_validity_check()
         return subscribed
-
-    def _persist_identity_cert(self, consumer):
-        """
-        Parses the consumer dict returned from the cert, pulls out the identity
-        certificate, and writes to disk.
-        """
-        return managerlib.persist_consumer_cert(consumer)
 
     def _get_environment_id(self, cp, owner_key, environment_name):
         # If none specified on CLI, return None, the registration method

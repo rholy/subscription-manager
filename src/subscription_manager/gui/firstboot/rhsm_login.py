@@ -116,7 +116,8 @@ class PerformRegisterScreen(registergui.PerformRegisterScreen):
             return
 
         try:
-            managerlib.persist_consumer_cert(new_account)
+            consumer_identity = require(IDENTITY)
+            consumer_identity.update(new_account)
             self._parent.backend.cs.force_cert_check()  # Ensure there isn't much wait time
 
             if self._parent.activation_keys:

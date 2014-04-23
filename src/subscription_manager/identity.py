@@ -14,12 +14,10 @@
 #
 
 import logging
-import os
 
-from rhsm.certificate import create_from_pem
 from rhsm.config import initConfig
-from subscription_manager.certdirectory import Path
 from subscription_manager import injection as inj
+from subscription_manager import utils
 
 CFG = initConfig()
 
@@ -118,7 +116,6 @@ class Identity(object):
         id_dir.add_id_cert_key_pair_from_bufs(consumer_info['idCert']['key'],
                                               consumer_info['idCert']['cert'])
 
-
         # reload to get the latest from id_dir
         self.reload()
 
@@ -129,7 +126,7 @@ class Identity(object):
         log.info("Consumer created: %s" % consumer_info)
 
         # syslog that we are now registered
-        system_log("Registered system with identity: %s" % self.uuid)
+        utils.system_log("Registered system with identity: %s" % self.uuid)
 
         return consumer_info
 
