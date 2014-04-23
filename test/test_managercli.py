@@ -35,7 +35,7 @@ is_valid_server_mock.return_value = True
 class TestCli(SubManFixture):
     # shut up stdout spew
     def setUp(self):
-        SubManFixture.setUp(self)
+        super(TestCli, self).setUp()
         sys.stderr = stubs.MockStderr()
 
     def tearDown(self):
@@ -265,7 +265,7 @@ class TestListCommand(TestCliProxyCommand):
     command_class = managercli.ListCommand
 
     def setUp(self):
-        super(TestListCommand, self).setUp(self)
+        super(TestListCommand, self).setUp()
         self.indent = 1
         self.max_length = 40
         self.cert_with_service_level = StubEntitlementCertificate(
@@ -589,7 +589,7 @@ class TestServiceLevelCommand(TestCliProxyCommand):
     command_class = managercli.ServiceLevelCommand
 
     def setUp(self):
-        TestCliProxyCommand.setUp(self)
+        super(TestServiceLevelCommand, self).setUp()
         self.cc.consumerIdentity = StubConsumerIdentity
         self.cc.cp = StubUEP()
 
@@ -666,9 +666,6 @@ class TestPluginsCommand(TestCliCommand):
 
 class TestOverrideCommand(TestCliProxyCommand):
     command_class = managercli.OverrideCommand
-
-    def setUp(self):
-        TestCliProxyCommand.setUp(self)
 
     def _test_exception(self, args):
         self.cc.main(args)
