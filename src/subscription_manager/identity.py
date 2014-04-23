@@ -111,6 +111,39 @@ class Identity(object):
             self.name = None
             self.uuid = None
 
+    def _update(self, consumer_info):
+        id_dir = inj.require(inj.ID_DIR)
+
+        # Add the new cert info to the dir, persist it, and refresh
+        id_dir.add_id_cert_key_pair_from_bufs(consumer_info['idCert']['key'],
+                                              consumer_info['idCert']['cert'])
+
+
+        # reload to get the latest from id_dir
+        self.reload()
+
+        # format a log message
+        consumer_info = {"consumer_name": self.name,
+                        "uuid": self.uuid}
+
+        log.info("Consumer created: %s" % consumer_info)
+
+        # syslog that we are now registered
+        system_log("Registered system with identity: %s" % self.uuid)
+
+        return consumer_info
+
+    def update(self, consumer_info):
+        """Update this Identity, create a new IdentityCertificate, and save it in the id directory.
+
+        consumer_info is a data_structure, basically the Consumer model returned from a getConsumer
+        call.
+
+        Create a new IdentityCertificate based on consumer_info, add it to IdentityDirectory (ID_DIR),
+        make IdentityDirectory persist it and refresh, then self.reload() to update our state with
+        that info. Replaces persist_consumer_cert()."""
+        self._update(consumer_info)
+
     def _get_consumer_identity_auth(self):
         # Populate this instance of Identity with info from ID_DIR
         # (in this particular impl, via a IdentityCertConsumerIdentityAuth

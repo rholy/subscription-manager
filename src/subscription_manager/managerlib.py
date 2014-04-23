@@ -20,7 +20,6 @@ import logging
 import os
 import re
 import shutil
-import syslog
 
 from rhsm.config import initConfig
 from rhsm.certificate import Key, CertificateException, create_from_pem
@@ -46,33 +45,6 @@ _ = gettext.gettext
 
 cfg = initConfig()
 ENT_CONFIG_DIR = cfg.get('rhsm', 'entitlementCertDir')
-
-
-
-def system_log(message, priority=syslog.LOG_NOTICE):
-    utils.system_log(message, priority)
-
-
-# FIXME: move me to identity.py
-def persist_consumer_cert(consumerinfo):
-    """
-     Calls the consumerIdentity, persists and gets consumer info
-    """
-    id_dir = require(ID_DIR)
-    # unsure if this could be injected?
-    id_dir.add_id_cert_key_pair_from_bufs(consumerinfo['idCert']['key'],
-                                          consumerinfo['idCert']['cert'])
-
-    # get the fresh consumer identity and log it.
-    consumer_identity = require(IDENTITY)
-    consumer_info = {"consumer_name": consumer_identity.getConsumerName(),
-                     "uuid": consumer_identity.getConsumerId()}
-
-    log.info("Consumer created: %s" % consumer_info)
-
-    system_log("Registered system with identity: %s" % consumer_identity.getConsumerId())
-    return consumer_info
-
 
 def get_installed_product_status(product_directory, entitlement_directory, uep):
     """
@@ -797,7 +769,7 @@ def unregister(uep, consumer_uuid):
     """
     uep.unregisterConsumer(consumer_uuid)
     log.info("Successfully un-registered.")
-    system_log("Unregistered machine with identity: %s" % consumer_uuid)
+    utils.system_log("Unregistered machine with identity: %s" % consumer_uuid)
     clean_all_data(backup=False)
 
 
