@@ -41,12 +41,11 @@ class CliUnSubscribeTests(SubManFixture):
                 StubProductDirectory([]))
         cmd = managercli.UnSubscribeCommand()
 
-        mock_identity = self._inject_mock_valid_consumer()
         managercli.EntCertLib = StubEntCertLib
 
         cmd.main(['unsubscribe', '--all'])
         self.assertEquals(cmd.cp.called_unbind_uuid,
-                          mock_identity.uuid)
+                          self.mock_consumer_uuid)
 
         cmd.main(['unsubscribe', '--serial=%s' % ent1.serial])
         self.assertEquals(cmd.cp.called_unbind_serial, ['%s' % ent1.serial])
@@ -73,7 +72,8 @@ class CliUnSubscribeTests(SubManFixture):
                 StubProductDirectory([]))
         cmd = managercli.UnSubscribeCommand()
 
-        self._inject_mock_invalid_consumer()
+        # not registered
+        self.mock_consumer_uuid = None
 
         cmd.main(['unsubscribe', '--all'])
         self.assertTrue(cmd.entitlement_dir.list_called)
