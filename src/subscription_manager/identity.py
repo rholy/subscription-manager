@@ -98,10 +98,6 @@ class Identity(object):
         self.auth = None
         self.name = None
         self.uuid = None
-        #import pdb; pdb.set_trace()
-        #print
-        #traceback.print_stack()
-        #print
         self.reload()
 
     def reload(self):
@@ -124,14 +120,12 @@ class Identity(object):
             self.uuid = None
 
     def _update(self, consumer_info):
-        log.debug("consumer_info: %s" % consumer_info)
         id_dir = inj.require(inj.ID_DIR)
 
         # Add the new cert info to the dir, persist it, and refresh
         id_dir.add_id_cert_key_pair_from_bufs(consumer_info['idCert']['key'],
                                               consumer_info['idCert']['cert'])
 
-        log.debug("about to reload")
         # reload to get the latest from id_dir
         self.reload()
 
@@ -162,7 +156,6 @@ class Identity(object):
         # (in this particular impl, via a IdentityCertConsumerIdentityAuth
         # created from a certificate2.IdentityCertificate that we load
         # from ID_DIR
-        log.debug("_get_consumer_identity_auth")
         id_dir = inj.require(inj.ID_DIR)
         # FIXME: wrap in exceptions, catch IOErrors etc, raise anything else
         id_cert = id_dir.get_default_id_cert()
@@ -172,7 +165,6 @@ class Identity(object):
     # this name is weird, since Certificate.is_valid actually checks the data
     # and this is a thin wrapper
     def is_valid(self):
-        log.debug("_is_valid %s" % self.uuid)
         return self.uuid is not None
 
     # FIXME: ugly names
