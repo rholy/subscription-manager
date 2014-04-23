@@ -140,6 +140,6 @@ class Identity(object):
         return self.auth.identity_cert
 
     def __str__(self):
-        return "<%s, name=%s, uuid=%s, consumer=%s>" % \
+        return "<%s, name=%s, uuid=%s, auth=%s>" % \
                 (self.__class__.__name__,
-                self.name, self.uuid, self.consumer)
+                self.name, self.uuid, self.auth)

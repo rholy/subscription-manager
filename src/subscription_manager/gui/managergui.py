@@ -267,6 +267,9 @@ class MainWindow(widgets.GladeWidget):
     def refresh(self):
         """ Refresh the UI. """
         # Always run on startup, when there is no last_uuid
+        # FIXME/REFACTOR: just looking for a consumer uuid
+        #                 seems like this logic should be outside the refresh
+        #                 -akl
         if not hasattr(self, 'last_uuid') or self.identity.uuid != self.last_uuid:
             self.last_uuid = self.identity.uuid
             self.on_registration_changed()
@@ -354,6 +357,9 @@ class MainWindow(widgets.GladeWidget):
 
     def _perform_unregister(self):
         try:
+            # FIXME: unregister can look up the current consumer identity
+            # itself. For that matter, it could lookup the consumer_auth_cp as
+            # well, though, threads... -akl
             managerlib.unregister(self.backend.cp_provider.get_consumer_auth_cp(), self.identity.uuid)
         except Exception, e:
             log.error("Error unregistering system with entitlement platform.")

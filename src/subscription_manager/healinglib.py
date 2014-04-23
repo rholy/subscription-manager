@@ -70,6 +70,7 @@ class HealingUpdateAction(object):
 
     def perform(self):
         # inject
+        # FIXME/REFACTOR: use properties, use ID_DIR -akl
         identity = inj.require(inj.IDENTITY)
         uuid = identity.getConsumerId()
         consumer = self.uep.getConsumer(uuid)

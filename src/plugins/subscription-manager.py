@@ -65,6 +65,8 @@ def update(conduit, cache_only):
         return
 
     try:
+        # TODO/REFACTOR: make it possible to create a connection with a
+        # consumer identity object instead of cert/key -akl
         uep = connection.UEPConnection(cert_file=cert_file, key_file=key_file)
     #FIXME: catchall exception
     except Exception:

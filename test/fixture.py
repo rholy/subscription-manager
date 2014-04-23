@@ -8,6 +8,8 @@ from mock import Mock, NonCallableMock, patch
 
 import stubs
 import subscription_manager.injection as inj
+from subscription_manager import certdirectory
+from subscription_manager import identity
 
 # use instead of the normal pid file based ActionLock
 from threading import RLock
@@ -52,6 +54,27 @@ class Matcher(object):
         return self.compare(self.some_obj, other)
 
 
+# if we inject a mock identity, we need to create a mock
+# id cert, a mock id cert dir, and a mock identity itself
+#  and ideally a helper factory to do it in one step
+class MockIdentityDirectory(NonCallableMock):
+    def get_default_id_cert(self):
+        return self.id_cert
+
+    def find_key_by_cert(self, cert):
+        return self.id_key
+
+    def add_id_cert_key_pair_from_bufs(self, key, cert):
+        pass
+
+class MockIdentity(NonCallableMock):
+    pass
+
+#class MockConsumerIdentityAuth(Mock):
+
+#class MockIdentityCertificate(Mock):
+
+
 class SubManFixture(unittest.TestCase):
     """
     Can be extended by any subscription manager test case to make
@@ -59,18 +82,41 @@ class SubManFixture(unittest.TestCase):
     mocks/stubs are in place.
     """
     def setUp(self):
+
+        self.mock_consumer_uuid = "fixture_consumer_uuid"
+
+
+        self.mock_id_cert = Mock(name="IdentityCertificateMock")
+        self.mock_id_cert.x509.subject = {'CN': self.mock_consumer_uuid}
+        self.mock_id_cert.x509.alt_name = "consumer name"
+        self.mock_id_cert.x509.serial = "123123123"
+        #mock_id_cert.getConsumerName.return_value = "fixture_identity_mock_name"
+        #mock_id_cert.getSerialNumber
+
+        # let's try using a mock here
+        self.mock_id_dir = MockIdentityDirectory(spec=certdirectory.IdentityDirectory, name='IdentityDirectoryMock')
+        self.mock_id_dir.id_cert = self.mock_id_cert
+        ##self.id_dir.id_cert.
+        self.mock_id_dir.id_key = "SOME KEY"
+        inj.provide(inj.ID_DIR, self.mock_id_dir)
+
+        inj.provide(inj.IDENTITY, identity.Identity, singleton=True)
+
+        # mock_id_dir will return our mock id certs
+        # regular Identity will check inject ID_DIR, so we shouldn't
+        # need to provide a mock identity at all
         # By default mock that we are registered. Individual test cases
         # can override if they are testing disconnected scenario.
-        id_mock = NonCallableMock(name='FixtureIdentityMock')
-        id_mock.exists_and_valid = Mock(return_value=True)
-        id_mock.uuid = 'fixture_identity_mock_uuid'
-        id_mock.name = 'fixture_identity_mock_name'
+        #id_mock = MockIdentity(name='FixtureIdentityMock')
+        #id_mock.exists_and_valid = Mock(return_value=True)
+        #id_mock.uuid = 'fixture_identity_mock_uuid'
+        #id_mock.name = 'fixture_identity_mock_name'
+
 
         # Don't really care about date ranges here:
         self.mock_calc = NonCallableMock()
         self.mock_calc.calculate.return_value = None
 
-        inj.provide(inj.IDENTITY, id_mock)
         inj.provide(inj.PRODUCT_DATE_RANGE_CALCULATOR, self.mock_calc)
 
         inj.provide(inj.ENTITLEMENT_STATUS_CACHE, stubs.StubEntitlementStatusCache())
@@ -88,10 +134,6 @@ class SubManFixture(unittest.TestCase):
         # we currently inject IDENTITY as well as ID_DIR.
         # We probably only need to inject ID_DIR, if it's a mock that returns
         # mock ID
-
-        # let's try using a mock here
-        self.id_dir = Mock(name='IdentityDirectoryMock')
-        inj.provide(inj.ID_DIR, self.id_dir)
 
         # Installed products manager needs PROD_DIR injected first
         inj.provide(inj.INSTALLED_PRODUCTS_MANAGER, stubs.StubInstalledProductsManager())
@@ -136,28 +178,30 @@ class SubManFixture(unittest.TestCase):
     def _get_release_versions(self, listing_path):
         return self._release_versions
 
+
+    #def _inject_identity(self, identity_to_inject):
+
+    # FIXME: these guys need to make self.id_dir do the right thing as well
     # For changing injection consumer id to one that fails "is_valid"
     def _inject_mock_valid_consumer(self, uuid=None):
         """For changing injected consumer identity to one that passes is_valid()
 
         Returns the injected identity if it need to be examined.
         """
-        identity = NonCallableMock(name='ValidIdentityMock')
-        identity.uuid = uuid or "VALIDCONSUMERUUID"
-        identity.is_valid = Mock(return_value=True)
-        inj.provide(inj.IDENTITY, identity)
+    #    identity = NonCallableMock(name='ValidIdentityMock')
+    #    identity.uuid = uuid or "VALIDCONSUMERUUID"
+    #    identity.is_valid = Mock(return_value=True)
+    #    inj.provide(inj.IDENTITY, identity)
+        if uuid:
+            self.mock_consumer_uuid = uuid
         return identity
 
-    def _inject_mock_invalid_consumer(self, uuid=None):
+    def _inject_mock_invalid_consumer(self):
         """For chaning injected consumer identity to one that fails is_valid()
 
         Returns the injected identity if it need to be examined.
         """
-        invalid_identity = NonCallableMock(name='InvalidIdentityMock')
-        invalid_identity.is_valid = Mock(return_value=False)
-        invalid_identity.uuid = uuid or "INVALIDCONSUMERUUID"
-        inj.provide(inj.IDENTITY, invalid_identity)
-        return invalid_identity
+        self.mock_consumer_uuid = None
 
     # use our naming convention here to make it clear
     # this is our extension. Note that python 2.7 adds a

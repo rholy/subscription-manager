@@ -37,6 +37,7 @@ class TestFactlib(fixture.SubManFixture):
 
     def test_factlib_updates_when_identity_exists(self):
 
+        # would check real Identity now
         invalid_consumer = self._inject_mock_valid_consumer()
         self.facts_passed_to_server = None
         self.consumer_uuid_passed_to_server = None

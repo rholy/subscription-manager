@@ -45,13 +45,6 @@ class TestCli(SubManFixture):
         cli = managercli.ManagerCLI()
         self.assertTrue('register' in cli.cli_commands)
 
-    @patch.object(managerlib, "check_identity_cert_perms")
-    def test_main_checks_identity_cert_perms(self, check_identity_cert_perms_mock):
-        cli = managercli.ManagerCLI()
-        # Catch the expected SystemExit so that the test can continue.
-        self.assertRaises(SystemExit, cli.main)
-        check_identity_cert_perms_mock.assert_called_with()
-
     def test_main_empty(self):
         cli = managercli.ManagerCLI()
         self.assertRaises(SystemExit, cli.main)
