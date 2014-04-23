@@ -18,7 +18,6 @@ import logging
 
 from subscription_manager import certlib
 from subscription_manager import injection as inj
-
 log = logging.getLogger('rhsm-app.' + __name__)
 
 
@@ -72,8 +71,8 @@ class IdentityUpdateAction(object):
         # only write the cert if the serial has changed
 
         # aiee
-        new_consumer_auth = identity.IdentityCertConsumerIdentityAuth.from_consumer_info(consumer_info)
-        log.debug("new consumer auth %s" % new_consumer_auth)
+        #new_consumer_auth = identity.IdentityCertConsumerIdentityAuth.from_consumer_info(consumer_info)
+        #log.debug("new consumer auth %s" % new_consumer_auth)
 
         id_cert = consumer_identity.auth.identity_cert
         if id_cert.getSerialNumber() != consumer_info['idCert']['serial']['serial']:
