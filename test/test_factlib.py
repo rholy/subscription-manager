@@ -38,7 +38,6 @@ class TestFactlib(fixture.SubManFixture):
     def test_factlib_updates_when_identity_exists(self):
 
         # would check real Identity now
-        invalid_consumer = self._inject_mock_valid_consumer()
         self.facts_passed_to_server = None
         self.consumer_uuid_passed_to_server = None
 
@@ -54,7 +53,7 @@ class TestFactlib(fixture.SubManFixture):
         count = update_report.updates()
         self.assertEquals(len(self.expected_facts), count)
         self.assertEquals(self.expected_facts, self.facts_passed_to_server)
-        self.assertEquals(invalid_consumer.uuid, self.consumer_uuid_passed_to_server)
+        self.assertEquals(self.mock_consumer_uuid, self.consumer_uuid_passed_to_server)
 
 
 class ConsumerIdentityExistsStub(stubs.StubConsumerIdentity):

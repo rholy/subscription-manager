@@ -937,6 +937,8 @@ class RegisterCommand(UserPassCommand):
 
     def _validate_options(self):
         self.autoattach = self.options.autosubscribe or self.options.autoattach
+        log.debug("is registered: %s" % self.is_registered())
+        log.debug("force: %s" % self.options.force)
         if self.is_registered() and not self.options.force:
             print(_("This system is already registered. Use --force to override"))
             sys.exit(1)

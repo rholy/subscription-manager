@@ -116,10 +116,13 @@ class Identity(object):
         # (in this particular impl, via a IdentityCertConsumerIdentityAuth
         # created from a certificate2.IdentityCertificate that we load
         # from ID_DIR
+        log.debug("_get_consumer_identity_auth")
         id_dir = inj.require(inj.ID_DIR)
         # FIXME: wrap in exceptions, catch IOErrors etc, raise anything else
         id_cert = id_dir.get_default_id_cert()
+        log.debug("foo")
         consumer_identity_auth = IdentityCertConsumerIdentityAuth(id_cert)
+        log.debug("bar")
         return consumer_identity_auth
 
     # this name is weird, since Certificate.is_valid actually checks the data

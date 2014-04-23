@@ -85,7 +85,6 @@ class SubManFixture(unittest.TestCase):
 
         self.mock_consumer_uuid = "fixture_consumer_uuid"
 
-
         self.mock_id_cert = Mock(name="IdentityCertificateMock")
         self.mock_id_cert.x509.subject = {'CN': self.mock_consumer_uuid}
         self.mock_id_cert.x509.alt_name = "consumer name"
@@ -100,7 +99,7 @@ class SubManFixture(unittest.TestCase):
         self.mock_id_dir.id_key = "SOME KEY"
         inj.provide(inj.ID_DIR, self.mock_id_dir)
 
-        inj.provide(inj.IDENTITY, identity.Identity, singleton=True)
+        inj.provide(inj.IDENTITY, identity.Identity)
 
         # mock_id_dir will return our mock id certs
         # regular Identity will check inject ID_DIR, so we shouldn't
@@ -194,6 +193,8 @@ class SubManFixture(unittest.TestCase):
     #    inj.provide(inj.IDENTITY, identity)
         if uuid:
             self.mock_consumer_uuid = uuid
+        inj_id = inj.require(inj.IDENTITY)
+        inj_id.reload()
         return identity
 
     def _inject_mock_invalid_consumer(self):
@@ -202,6 +203,8 @@ class SubManFixture(unittest.TestCase):
         Returns the injected identity if it need to be examined.
         """
         self.mock_consumer_uuid = None
+        inj_id = inj.require(inj.IDENTITY)
+        inj_id.reload()
 
     # use our naming convention here to make it clear
     # this is our extension. Note that python 2.7 adds a
