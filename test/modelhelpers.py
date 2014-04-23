@@ -95,6 +95,14 @@ def create_pool(product_id, product_name, quantity=10, consumed=0, provided_prod
     return to_return
 
 
+def create_consumer(uuid, name, serial, cert, key):
+    consumer = {"uuid": uuid,
+                'idCert': {'cert': cert,
+                            'key': key}
+                }
+    return consumer
+
+
 def create_attribute_list(attribute_map):
     attribute_list = []
     for name, value in attribute_map.iteritems():

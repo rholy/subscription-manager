@@ -67,6 +67,13 @@ class IdentityCertConsumerIdentityAuth(object):
             (self.getConsumerName(),
              self.getConsumerId())
 
+    @classmethod
+    def from_consumer_info(cls, consumer_info):
+        """Construct based on the consumer info returned from RHSM JSON API."""
+        cert = consumer_info['idCert']['cert']
+        return cls(cert)
+
+
 
 # Identity wraps ConsumerIdentity, and provides info specific
 # to subman needs.
@@ -88,6 +95,13 @@ class IdentityCertConsumerIdentityAuth(object):
 class Identity(object):
     """Wrapper for sharing consumer identity without constant reloading."""
     def __init__(self):
+        self.auth = None
+        self.name = None
+        self.uuid = None
+        #import pdb; pdb.set_trace()
+        #print
+        #traceback.print_stack()
+        #print
         self.reload()
 
     def reload(self):
@@ -110,12 +124,14 @@ class Identity(object):
             self.uuid = None
 
     def _update(self, consumer_info):
+        log.debug("consumer_info: %s" % consumer_info)
         id_dir = inj.require(inj.ID_DIR)
 
         # Add the new cert info to the dir, persist it, and refresh
         id_dir.add_id_cert_key_pair_from_bufs(consumer_info['idCert']['key'],
                                               consumer_info['idCert']['cert'])
 
+        log.debug("about to reload")
         # reload to get the latest from id_dir
         self.reload()
 
@@ -150,14 +166,13 @@ class Identity(object):
         id_dir = inj.require(inj.ID_DIR)
         # FIXME: wrap in exceptions, catch IOErrors etc, raise anything else
         id_cert = id_dir.get_default_id_cert()
-        log.debug("foo")
         consumer_identity_auth = IdentityCertConsumerIdentityAuth(id_cert)
-        log.debug("bar")
         return consumer_identity_auth
 
     # this name is weird, since Certificate.is_valid actually checks the data
     # and this is a thin wrapper
     def is_valid(self):
+        log.debug("_is_valid %s" % self.uuid)
         return self.uuid is not None
 
     # FIXME: ugly names
@@ -172,7 +187,7 @@ class Identity(object):
     def getConsumerCert(self):
         return self.auth.identity_cert
 
-    def __str__(self):
+    def not_str__(self):
         return "<%s, name=%s, uuid=%s, auth=%s>" % \
                 (self.__class__.__name__,
                 self.name, self.uuid, self.auth)

@@ -32,19 +32,17 @@ class CliRegistrationTests(SubManFixture):
         return self.persisted_consumer
 
     def test_register_persists_consumer_cert(self):
-        connection.UEPConnection = StubUEP
 
         # When
         cmd = RegisterCommand()
 
         self._inject_mock_invalid_consumer()
 
-        cmd._persist_identity_cert = self.stub_persist
 
         cmd.main(['register', '--username=testuser1', '--password=password'])
 
-        # Then
-        self.assertEqual('dummy-consumer-uuid', self.persisted_consumer["uuid"])
+        consumer_identity = inj.require(inj.IDENTITY)
+        self.assertEqual('dummy-consumer-uuid', consumer_identity.uuid)
 
     def _inject_ipm(self):
         #stub_ipm = stubs.StubInstalledProductsManager()
@@ -53,11 +51,9 @@ class CliRegistrationTests(SubManFixture):
         return mock_ipm
 
     def test_installed_products_cache_written(self):
-        connection.UEPConnection = StubUEP
 
         self._inject_mock_invalid_consumer()
         cmd = RegisterCommand()
-        cmd._persist_identity_cert = self.stub_persist
         self._inject_ipm()
 
         cmd.main(['register', '--username=testuser1', '--password=password'])
@@ -68,11 +64,9 @@ class CliRegistrationTests(SubManFixture):
     @patch('subscription_manager.managercli.EntCertLib')
     def test_activation_keys_updates_certs_and_repos(self,
                                                      mock_entcertlib):
-        connection.UEPConnection = StubUEP
 
         self._inject_mock_invalid_consumer()
         cmd = RegisterCommand()
-        cmd._persist_identity_cert = self.stub_persist
 
         mock_entcertlib_instance = mock_entcertlib.return_value
 
@@ -89,16 +83,13 @@ class CliRegistrationTests(SubManFixture):
         def get_consumer(self, *args, **kwargs):
             pass
 
-        StubUEP.getConsumer = get_consumer
-        connection.UEPConnection = StubUEP
-
         self._inject_mock_invalid_consumer()
         cmd = RegisterCommand()
-        cmd._persist_identity_cert = self.stub_persist
 
         mock_entcertlib_instance = mock_entcertlib.return_value
 
-        connection.UEPConnection.getConsumer = Mock(return_value={'uuid': '123123'})
+        #consumer_info = modelhelpers.create_consumer(
+        #connection.UEPConnection.getConsumer = Mock(return_value=modelhelpers.create_consumer()
 
         self._inject_ipm()
         cmd.main(['register', '--consumerid=123456', '--username=testuser1', '--password=password', '--org=test_org'])

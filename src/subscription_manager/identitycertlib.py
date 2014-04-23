@@ -62,19 +62,27 @@ class IdentityUpdateAction(object):
 
     def _update_cert(self, identity):
 
-        id_dir = inj.require(inj.ID_DIR)
-        id_cert = id_dir.get_default_id_cert()
-
+        consumer_identity = inj.require(inj.IDENTITY)
         # fetch the latest consumer info, include cert
-        consumer_info = self._get_consumer(identity)
+        consumer_info = self._get_consumer(consumer_identity)
 
+        # We want to compare the existing identity info with that fetched from
+        # the server. Would like to be able to compare the Consumer json
+        # model's id info with the IDENTITY model.
         # only write the cert if the serial has changed
+
+        # aiee
+        new_consumer_auth = identity.IdentityCertConsumerIdentityAuth.from_consumer_info(consumer_info)
+        log.debug("new consumer auth %s" % new_consumer_auth)
+
+        id_cert = consumer_identity.auth.identity_cert
         if id_cert.getSerialNumber() != consumer_info['idCert']['serial']['serial']:
             log.debug('identity certificate changed, writing new one')
 
-            # add and persist
-            id_dir.add_id_cert_key_pair_from_bufs(consumer_info['idCert']['key'],
-                                                  consumer_info['idCert']['cert'])
+            # add persist and refresh
+            consumer_identity.update(consumer_info)
+            #id_dir.add_id_cert_key_pair_from_bufs(consumer_info['idCert']['key'],
+            #                                      consumer_info['idCert']['cert'])
 
         # FIXME: use different status to indicate a new id cert
         # updated the cert, or at least checked

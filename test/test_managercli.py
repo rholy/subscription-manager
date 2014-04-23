@@ -199,7 +199,7 @@ class TestRegisterCommand(TestCliProxyCommand):
 
     def setUp(self):
         super(TestRegisterCommand, self).setUp()
-        self._inject_mock_invalid_consumer()
+        self.provide_identity(uuid=None)
         # TODO: two versions of this, one registered, one not registered
 
     def _test_exception(self, args):
@@ -215,7 +215,8 @@ class TestRegisterCommand(TestCliProxyCommand):
         try:
             self.cc.main(args)
             self.cc._validate_options()
-        except SystemExit:
+        except SystemExit, e:
+            print e
             self.fail("Exception Raised")
 
     def test_keys_and_consumerid(self):
@@ -264,11 +265,12 @@ class TestListCommand(TestCliProxyCommand):
     command_class = managercli.ListCommand
 
     def setUp(self):
+        super(TestListCommand, self).setUp(self)
         self.indent = 1
         self.max_length = 40
         self.cert_with_service_level = StubEntitlementCertificate(
             StubProduct("test-product"), service_level="Premium")
-        TestCliProxyCommand.setUp(self)
+        #TestCliProxyCommand.setUp(self)
 
     @mock.patch('subscription_manager.managerlib.get_available_entitlements')
     def test_none_wrap_available_pool_id(self, mget_ents):

@@ -29,6 +29,8 @@ from rhsm.certificate import GMT
 from subscription_manager.gui.utils import AsyncWidgetUpdater, handle_gui_exception
 from rhsm.certificate2 import Version
 
+import modelhelpers
+
 # config file is root only, so just fill in a stringbuffer
 cfg_buf = """
 [foo]
@@ -364,7 +366,9 @@ class StubUEP:
                  proxy_hostname=None, proxy_port=None,
                  proxy_user=None, proxy_password=None,
                  cert_file=None, key_file=None):
-        self.registered_consumer_info = {"uuid": 'dummy-consumer-uuid'}
+        #self.registered_consumer_info = {"uuid": 'dummy-consumer-uuid'}
+        self.registered_consumer_info = modelhelpers.create_consumer('dummy-consumer-uuid', 'dummy-consumer-name',
+                                                                     '123456', 'CERT TEXT', 'KEY TEXT')
         self.environment_list = []
         self.called_unregister_uuid = None
         self.called_unbind_uuid = None
