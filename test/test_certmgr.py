@@ -127,8 +127,6 @@ class CertManagerTestBase(SubManFixture):
 
     def tearDown(self):
         self.patcher3.stop()
-        self.patcher6.stop()
-        #self.patcher8.stop()
 
         self.patcher_entcertlib_writer.stop()
 
