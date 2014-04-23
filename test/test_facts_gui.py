@@ -3,7 +3,7 @@ from fixture import SubManFixture
 from subscription_manager.injection import provide, IDENTITY
 from stubs import StubUEP, StubFacts
 from subscription_manager.gui import factsgui
-from mock import Mock, NonCallableMock, patch
+from mock import NonCallableMock, patch
 
 
 class FactDialogTests(SubManFixture):
