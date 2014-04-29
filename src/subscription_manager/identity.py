@@ -25,7 +25,14 @@ CFG = initConfig()
 log = logging.getLogger('rhsm-app.' + __name__)
 
 
-class ConsumerIdentity:
+class ConsumerIdentityData(object):
+    consumer = None
+    uuid = None
+    name = None
+    serial = None
+
+
+class ConsumerIdentity(object):
     """Consumer info and certificate information.
 
     Includes helpers for reading/writing consumer identity certificates
@@ -76,15 +83,18 @@ class ConsumerIdentity:
         self.cert = certstring
         self.x509 = create_from_pem(certstring)
 
-    def getConsumerId(self):
+    @property
+    def uuid(self):
         subject = self.x509.subject
         return subject.get('CN')
 
-    def getConsumerName(self):
+    @property
+    def name(self):
         altName = self.x509.alt_name
         return altName.replace("DirName:/CN=", "")
 
-    def getSerialNumber(self):
+    @property
+    def serial(self):
         return self.x509.serial
 
     # TODO: we're using a Certificate which has it's own write/delete, no idea
@@ -116,34 +126,41 @@ class ConsumerIdentity:
 
     def __str__(self):
         return 'consumer: name="%s", uuid=%s' % \
-            (self.getConsumerName(),
-             self.getConsumerId())
+            (self.name,
+             self.uuid)
 
 
 class Identity(object):
     """Wrapper for sharing consumer identity without constant reloading."""
     def __init__(self):
+        self._consumer = None
         self.reload()
 
     def reload(self):
         """Check for consumer certificate on disk and update our info accordingly."""
         log.debug("Loading consumer info from identity certificates.")
         try:
-            # uh, weird
-            # FIXME: seems weird to wrap this stuff
-            self.consumer = self._get_consumer_identity()
-            self.name = self.consumer.getConsumerName()
-            self.uuid = self.consumer.getConsumerId()
+            self._consumer = self._get_consumer_identity()
+            if not self._consumer:
+                self.unset()
+                return
+            self.name = self._consumer.name
+            self.uuid = self._consumer.uuid
+            self.serial = self._consumer.serial
 
-        # XXX shouldn't catch the global exception here, but that's what
+        # NOTE: shouldn't catch the global exception here, but that's what
         # existsAndValid did, so this is better.
         except Exception, e:
             # FIXME: can probably remove this exception logging
             log.exception(e)
             log.info("Error reading consumer identity cert")
-            self.consumer = None
-            self.name = None
-            self.uuid = None
+            self.unset()
+
+    def unset(self):
+        self._consumer = None
+        self.name = None
+        self.uuid = None
+        self.serial = None
 
     def _get_consumer_identity(self):
         # FIXME: wrap in exceptions, catch IOErrors etc, raise anything else
@@ -152,20 +169,26 @@ class Identity(object):
     # this name is weird, since Certificate.is_valid actually checks the data
     # and this is a thin wrapper
     def is_valid(self):
-        return self.uuid is not None
+        if self._consumer:
+            return self.uuid is not None
 
-    def getConsumerName(self):
-        return self.name
+    def get_uuid(self):
+        if self._consumer:
+            return self._consumer.uuid
+        return None
 
-    def getConsumerId(self):
-        return self.uuid
+    def set_uuid(self, value):
+        if self._consumer:
+            self._consumer.uuid = value
+        assert('huh')
 
-    # getConsumer is kind of vague, and this is just here to
-    # the cert object
-    def getConsumerCert(self):
-        return self.consumer
+    def delete_uuid(self):
+        if self._consumer:
+            del self._consumer.uuid
+    # The 2.4 way...
+    uuid = property(get_uuid, set_uuid, delete_uuid)
 
     def __str__(self):
         return "<%s, name=%s, uuid=%s, consumer=%s>" % \
                 (self.__class__.__name__,
-                self.name, self.uuid, self.consumer)
+                self.name, self.uuid, self._consumer)

@@ -334,6 +334,9 @@ class StubConsumerIdentity(object):
     def __init__(self, keystring, certstring):
         self.key = keystring
         self.cert = certstring
+        self.uuid = self.CONSUMER_UUID
+        self.name = self.CONSUMER_NAME
+        self.serial = self.SERIAL
 
     @classmethod
     def existsAndValid(cls):
@@ -342,15 +345,6 @@ class StubConsumerIdentity(object):
     @classmethod
     def exists(cls):
         return False
-
-    def getConsumerName(self):
-        return StubConsumerIdentity.CONSUMER_NAME
-
-    def getConsumerId(self):
-        return StubConsumerIdentity.CONSUMER_ID
-
-    def getSerialNumber(self):
-        return StubConsumerIdentity.SERIAL
 
     @classmethod
     def read(cls):
@@ -514,9 +508,6 @@ class StubConsumer:
 
     def reload(self):
         pass
-
-    def getConsumerId(self):
-        return "12341234234"
 
 
 class StubEntActionInvoker:
