@@ -14,19 +14,20 @@
 #
 import logging
 
+# rhsm.conf->iniparse->configParser can raise ConfigParser exceptions
+import ConfigParser
+
+
 from subscription_manager import api
 
-from content_plugins.ostree import repo_file
-from content_plugins.ostree import model
+from rhsm_content_plugins.ostree import repo_file
+from rhsm_content_plugins.ostree import model
 
 # plugins get
 log = logging.getLogger('rhsm-app.' + __name__)
 
 
 class OstreeContentActionInvoker(api.BaseActionInvoker):
-    def __init__(self):
-        self.report = None
-
     def _do_update(self):
         action = OstreeContentUpdateActionCommand()
         return action.perform()
@@ -48,10 +49,10 @@ class OstreeContentUpdateActionCommand(object):
     def perform(self):
         # define... somewhere?
         OSTREE_CONTENT_TYPE = "ostree"
-        self.ostree_config.load()
+        self.load_config()
 
         # bleah, just do it
-        ent_dir = api.require(api.ENT_DIR)
+        ent_dir = api.inj.require(api.inj.ENT_DIR)
 
         content_set = set()
         # valid ent certs could be an iterator
@@ -64,8 +65,26 @@ class OstreeContentUpdateActionCommand(object):
                     log.debug("adding %s to ostree content" % content)
                     content_set.add(content)
 
-        for content in content_set:
-            log.debug("Do a thing to content: %s" % content)
+        # given current config, and the new contents, construct a list
+        # of remotes to apply to our local config of remotes.
+        updates_builder = model.OstreeConfigUpdatesBuilder(self.ostree_config,
+                                                           content_set=content_set,
+                                                           report=self.report)
+
+        updates = updates_builder.build()
+
+        # Get controller to update the model with the updates
+        controller = model.OstreeConfigController(self.ostree_config,
+                                                  report=self.report)
+        log.debug("Updates: %s" % updates)
+        controller.update(updates)
+        return self.report
+
+    def load_config(self):
+        try:
+            self.ostree_config.load()
+        except ConfigParser.Error:
+            log.info("No ostree content repo config file found. Not loading ostree config.")
 
 
 class OstreeContentUpdateActionReport(api.ActionReport):
