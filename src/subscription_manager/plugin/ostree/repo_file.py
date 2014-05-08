@@ -14,7 +14,7 @@ for a given ostree sha.
 We base the config parser on rhsm.config.RhsmConfigParser,
 except with "defaults" support removed.
 
-We has a KeyFileConfigParser, and two subclasses of it
+We have a KeyFileConfigParser, and two subclasses of it
 for RepoFileConfigParser and OriginFileConfigParser.
 
 There is also a OstreeConfigFile, and two subsclasses of
@@ -58,7 +58,8 @@ class KeyFileConfigParser(config.RhsmConfigParser):
     def has_default(self, section, prop):
         return False
 
-
+# just specific names for ini file versions. Don't
+# really need this atm
 class RepoFileConfigParser(KeyFileConfigParser):
     pass
 
@@ -67,7 +68,9 @@ class OriginFileConfigParser(KeyFileConfigParser):
     pass
 
 
+
 class OstreeConfigFile(object):
+    """Base class for ostree related config file parsers"""
     config_parser_class = KeyFileConfigParser
 
     def __init__(self, filename=None):
@@ -79,6 +82,12 @@ class OstreeConfigFile(object):
 
 
 class RepoFile(OstreeConfigFile):
+    """Represents /ostree/repo/config
+
+    Includes logic and knowledge specific to that file,
+    include that all [remote *] are a type of config section,
+    and how to determine that.
+    """
     config_parser_class = RepoFileConfigParser
 
     def remote_sections(self):

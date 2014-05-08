@@ -54,6 +54,10 @@ class OstreeContentUpdateActionCommand(object):
         # bleah, just do it
         ent_dir = api.inj.require(api.inj.ENT_DIR)
 
+
+        # FIXME: This assumes a lot about how Content blobs
+        # could eventually map to ostreeRemotes. Or that Contents
+        # are from entitlement certs.
         content_set = set()
         # valid ent certs could be an iterator
         for ent_cert in ent_dir.list_valid():
