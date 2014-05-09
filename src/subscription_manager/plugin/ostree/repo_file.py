@@ -112,6 +112,32 @@ class RepoFile(OstreeConfigFile):
         if section.startswith("remote"):
             return True
 
+    def clear_remotes(self):
+        for remote in self.remote_sections():
+            # do we need to delete options and section or just section?
+            for key, value in self.config_parser.items(remote):
+                self.config_parser.remove_option(remote, key)
+            self.config_parser.remove_section(remote)
+
+    def set(self, section, key, value):
+        return self.config_parser.set(section, key, value)
+
+    # TODO: this is really just serializing OstreeRemote
+    def set_remote(self, ostree_remote):
+        # format section name
+        # remote attribut -> section key
+        section_name = 'remote ' + '"%s"' % ostree_remote.name
+        self.set(section_name, 'url', ostree_remote.url)
+        if ostree_remote.branches:
+            self.set(section_name, 'branches', office_remote.branches)
+
+    # TODO: make a serializer of OstreeCore
+    def set_core(self, ostree_core):
+        # FIXME: shouldn't care about particular values unless we
+        # know we have to munge them
+        self.set('core', 'repo_version', ostree_core.repo_version)
+        self.set('core', 'mode', ostree_core.mode)
+
 
 class OriginFile(object):
     config_parser_class = OriginFileConfigParser
