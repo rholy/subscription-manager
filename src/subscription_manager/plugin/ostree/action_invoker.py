@@ -65,8 +65,8 @@ class OstreeContentUpdateActionCommand(object):
         # of remotes to apply to our local config of remotes.
         updates_builder = model.OstreeConfigUpdatesBuilder(self.ostree_config,
             content_set=content_set)
-
         updates = updates_builder.build()
+
         report.origin = "FIXME"
         report.refspec = "FIXME"
         report.remote_updates = list(updates.remote_set)
