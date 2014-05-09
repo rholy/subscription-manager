@@ -1,5 +1,8 @@
+import logging
 
 from rhsm import config
+
+log = logging.getLogger("rhsm-app." + __name__)
 
 """Ostree has two config files, both based on the freedesktop.org
 Desktop Entry spec. This defines a file format based on "ini" style
@@ -58,6 +61,17 @@ class KeyFileConfigParser(config.RhsmConfigParser):
     def has_default(self, section, prop):
         return False
 
+    def save(self, config_file=None):
+        self.log_contents()
+        log.debug("KeyFile.save %s" % self.config_file)
+        super(KeyFileConfigParser, self).save()
+
+    def log_contents(self):
+        for section in self.sections():
+            log.debug("section: %s" % section)
+            for key, value in self.items(section):
+                log.debug("     %s: %s" % (key, value))
+
 
 class RepoFileConfigParser(KeyFileConfigParser):
     pass
@@ -76,6 +90,10 @@ class OstreeConfigFile(object):
 
     def _get_config_parser(self):
         return self.config_parser_class(config_file=self.filename)
+
+    def save(self):
+        log.debug("OstreeConfigFile.save")
+        self.config_parser.save()
 
 
 class RepoFile(OstreeConfigFile):

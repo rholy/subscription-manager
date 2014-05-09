@@ -1,4 +1,5 @@
 
+import logging
 import re
 
 from subscription_manager.plugin.ostree import repo_file
@@ -7,14 +8,19 @@ OSTREE_REPO_CONFIG = "/ostree/repo/config"
 
 REMOTE_SECTION_MATCH = """remote\s+["'](.+)['"]"""
 
+log = logging.getLogger("rhsm-app." + __name__)
+
 
 class OstreeRemote(object):
     @classmethod
     def from_config_section(cls, section, items):
         remote = cls()
-        remote.url = items['url']
-        remote.branches = items['branches']
-        remote.gpg_verify = items['gpg-verify']
+        remote.url = items.get('url')
+        remote.branches = items.get('branches')
+        # note.. gpg-verify->gpg_verify
+        remote.gpg_verify = items.get('gpg-verify')
+        # we could add the rest of items here if we had just
+        # a dict or a set of tuples instead of class...
         name = OstreeRemote.name_from_section(section)
         remote.name = name
         return remote
@@ -38,7 +44,10 @@ class OstreeRemote(object):
         remote = cls()
         remote.name = content.label
         remote.url = content.url
+        return remote
 
+    def __str__(self):
+        return "<OstreeRemote name=%s url=%s branches=%s>" % (self.name, self.url, self.branches)
         # ?
 
 
@@ -52,11 +61,20 @@ class OstreeRemotes(object):
         remotes = cls()
         sections = repo_config.remote_sections()
         for section in sections:
-            items = repo_config.items()
+            item_list = repo_config.config_parser.items(section)
+            log.debug("item_list: %s" % item_list)
+            items = dict(item_list)
+            log.debug("items: %s" % items)
             remote = OstreeRemote.from_config_section(section, items)
             remotes.data.append(remote)
-        return cls
+        return remotes
 
+    def __str__(self):
+        s = "<OstreeRemotes >\n"
+        for remote in self.data:
+            s = s + " %s" % remote
+        s = s + "</OstreeRemotes>"
+        return s
 
 # TODO: is this used?
 class OstreeRemoteUpdater(object):
@@ -81,7 +99,7 @@ class OstreeRemotesUpdater(object):
         #       time.
         # Or a subclass could provide a more detailed update
         self.ostree_remotes = remotes_set
-
+        log.debug("OstreeRemotesUpdater: %s %s" % (self.ostree_remotes, remotes_set))
         # TODO: update report
 
 
@@ -103,6 +121,7 @@ class OstreeCore(object):
 
 
 class OstreeConfigRepoConfigFileLoader(object):
+    """Load the repo config file and populate a OstreeConfig."""
     repo_config_file = OSTREE_REPO_CONFIG
 
     def __init__(self, repo_config_file=None):
@@ -120,12 +139,18 @@ class OstreeConfigRepoConfigFileLoader(object):
         self.load_core()
 
     def load_remotes(self):
+        log.debug("%s load_remotes" % __name__)
         self.remotes = OstreeRemotes.from_config(self.repo_config)
+        log.debug("load_remotes: %s" % self.remotes)
 
     def load_core(self):
         self.core = OstreeCore()
         self.core.repo_version = self.repo_config.config_parser.get('core', 'repo_version')
         self.core.mode = self.repo_config.config_parser.get('core', 'mode')
+
+    def save(self):
+        log.debug("ostreeRepoConfigFileLoader.save")
+        self.repo_config.save()
 
 
 class OstreeConfigUpdates(object):
@@ -148,10 +173,12 @@ class OstreeConfigUpdatesBuilder(object):
         # NOTE: Assume 1 content == 1 remote.
         # If that's not valid, this has to do more.
         remote_set = set()
+        log.debug("builder.build %s" % self.content_set)
         for content in self.content_set:
             remote = OstreeRemote.from_content(content)
             remote_set.add(remote)
 
+        log.debug(remote_set)
         updates = OstreeConfigUpdates(self.ostree_config.core,
                                       remote_set=remote_set)
         return updates
@@ -170,6 +197,10 @@ class OstreeConfig(object):
         self.remotes = self.repo_config_loader.remotes
         self.core = self.repo_config_loader.core
 
+    def save(self):
+        log.debug("OstreeConfig.save")
+        self.repo_config_loader.save()
+
 
 # still needs origin, etc
 class OstreeConfigController(object):
@@ -181,5 +212,8 @@ class OstreeConfigController(object):
             ostree_remotes=self.ostree_config.remotes)
         remotes_updater.update(updates.remote_set)
 
+    def save(self):
+        log.debug("OstreeConfigController.save")
+        self.ostree_config.save()
         # update core
         # update origin
