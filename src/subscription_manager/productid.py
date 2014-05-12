@@ -22,6 +22,8 @@ import os
 import types
 import yum
 
+from distutils.version import LooseVersion
+
 from rhsm.certificate import create_from_pem
 
 from subscription_manager.certdirectory import Directory
@@ -85,7 +87,6 @@ class ProductDatabase:
             self.populate_content(d)
         except Exception:
             pass
-        f.close()
 
     def populate_content(self, db_dict):
         """Populate map with info from a productid -> [repoids] map.
@@ -156,7 +157,8 @@ class ComparableProduct(ComparableMixin):
 
     def compare_keys(self, other):
         if self.product.id == other.product.id:
-            return (self.product.version, other.product.version)
+            return (LooseVersion(self.product.version),
+                    LooseVersion(other.product.version))
         return None
 
     def __str__(self):
