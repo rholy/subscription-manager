@@ -21,6 +21,7 @@ import logging
 import os
 import types
 import yum
+import rpm
 
 from rhsm.certificate import create_from_pem
 
@@ -134,7 +135,7 @@ class ComparableMixin(object):
     def __ge__(self, other):
         return self._compare(self.compare_keys(other), lambda s, o: s >= o)
 
-
+from distutils.version import LooseVersion
 class ComparableProduct(ComparableMixin):
     """A comparable version from a Product. For comparing and sorting Product objects.
 
@@ -156,8 +157,12 @@ class ComparableProduct(ComparableMixin):
 
     def compare_keys(self, other):
         if self.product.id == other.product.id:
-            return (self.product.version, other.product.version)
+            return (LooseVersion(self.product.version),
+                    LooseVersion(other.product.version))
         return None
+
+    def version_tuple(self, version):
+        return tuple([int(x) for x in version.split(".")])
 
     def __str__(self):
         return "<ComparableProduct id=%s version=%s name=%s product=%s>" % \
