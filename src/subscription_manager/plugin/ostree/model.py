@@ -6,7 +6,7 @@ from subscription_manager.plugin.ostree import repo_file
 
 OSTREE_REPO_CONFIG = "/ostree/repo/config"
 
-REMOTE_SECTION_MATCH = """remote\s+["'](.+)['"]"""
+REMOTE_SECTION_MATCH = r"remote\s+\"(?P<remote_name>.+)\""
 
 log = logging.getLogger("rhsm-app." + __name__)
 
@@ -46,7 +46,7 @@ class OstreeRemote(object):
         matcher = re.compile(REMOTE_SECTION_MATCH)
         result = matcher.match(section)
         if result:
-            return result.group(0)
+            return result.groupdict()['remote_name']
 
         # FIXME
         raise Exception
@@ -101,6 +101,7 @@ class OstreeRemotes(object):
         remotes = cls()
         sections = repo_config.remote_sections()
         for section in sections:
+            log.debug("section: |%s|" % section)
             item_list = repo_config.config_parser.items(section)
             log.debug("item_list: %s" % item_list)
             items = dict(item_list)
@@ -131,7 +132,7 @@ class OstreeOrigin(object):
 
 # whatever is in config:[core]
 # TODO: Should probably just be a container of key, value maps
-class OstreeCore(object):
+class OstreeCore(dict):
     pass
 
 
@@ -155,9 +156,11 @@ class OstreeConfigRepoConfigFileLoader(object):
         # This
 
     def load(self):
-        """Read ostree repo config, and populate it's data."""
-        # raises ConfigParser.Error based exceptions if there is no config or
-        # errors reading it.
+        """Read ostree repo config, and populate it's data.
+
+        Raises ConfigParser.Error based exceptions if there is no config or
+        errors reading it.
+        """
         # TODO: when/where do we create it the first time?
         self.repo_config = repo_file.RepoFile(self.repo_config_file)
         self.load_remotes()
@@ -170,8 +173,8 @@ class OstreeConfigRepoConfigFileLoader(object):
 
     def load_core(self):
         self.core = OstreeCore()
-        self.core.repo_version = self.repo_config.config_parser.get('core', 'repo_version')
-        self.core.mode = self.repo_config.config_parser.get('core', 'mode')
+        self.core['repo_version'] = self.repo_config.config_parser.get('core', 'repo_version')
+        self.core['mode'] = self.repo_config.config_parser.get('core', 'mode')
 
 
 # persist OstreeConfig object to a config file
@@ -195,30 +198,20 @@ class OstreeConfigRepoConfigFileSave(object):
 
     # serialize OstreeConfig more generally
     def update_remotes(self, ostree_config):
-        """Update the on disk ostree repo config with it's new remotes."""
+        """Update the OstreeConfig ostree_config's config file with it's new remotes."""
         # TODO: we need to figure out how to update sections
         #    this only removes all and adds new ones
         for remote in ostree_config.remotes:
             self.repo_config_file.set_remote(remote)
 
     def update_core(self, ostree_config):
-        """Update core section if need be."""
+        """Update core section in OstreeConfig ostree_config's config file if need be."""
         self.repo_config_file.set_core(ostree_config.core)
-
-
-class OstreeConfigUpdates(object):
-    """The info a ostree update action needs to update OstreeConfig.
-
-    remote sets, origin, refspec, branches, etc.
-    """
-    def __init__(self, core=None, remote_set=None):
-        self.core = core
-        self.remote_set = remote_set
 
 
 class OstreeConfigUpdatesBuilder(object):
     def __init__(self, ostree_config, content_set):
-        self.ostree_config = ostree_config
+        self.orig_ostree_config = ostree_config
         self.content_set = content_set
 
     def build(self):
@@ -231,22 +224,25 @@ class OstreeConfigUpdatesBuilder(object):
         # If that's not valid, this has to do more.
         new_remotes = OstreeRemotes()
 
+        content_to_remote = {}
         log.debug("builder.build %s" % self.content_set)
         for content in self.content_set:
             # TODO: we may need to keep a map of original config
             #       remotes -> old Content, old Content -> new Content,
             #       and new Content -> new Remotes.
-            # This does not create that map yet.
+            #       This does not create that map yet.
             remote = OstreeRemote.from_content(content)
             new_remotes.add(remote)
 
-        new_ostree_config = self.ostree_config.copy()
+            # track for reports
+            # mutliple contents to the same remote?
+            content_to_remote[content] = remote
 
-        # For now, old core = new core always, so the core
-        # on the updates object is the same
-        updates = OstreeConfigUpdates(new_ostree_config.core,
-                                      remote_set=new_remotes)
-        return updates
+        new_ostree_config = self.orig_ostree_config.copy()
+        ostree_config_updates = OstreeConfigUpdates(self.orig_ostree_config, new_ostree_config)
+        ostree_config_updates.content_to_remote = content_to_remote
+
+        return ostree_config_updates
 
 
 class OstreeConfig(object):
@@ -258,9 +254,10 @@ class OstreeConfig(object):
     OstreeConfig saving serializes OstreeConfig state to the
     configuration files.
     """
-    def __init__(self, core=None, remotes=None):
+    def __init__(self, core=None, remotes=None, repo_config_file=None):
         self.remotes = remotes
         self.core = core
+        self.repo_config_file = repo_config_file
 
     # Unsure where the code to (de)serialize, and then persist these should
     # live. Here? OstreeConfigController? The Config file classes?
@@ -285,6 +282,37 @@ class OstreeConfig(object):
         new_ostree_config = copy.deepcopy(self)
         return new_ostree_config
 
+    def __repr__(self):
+        s = []
+        s.append("<OsTreeConfig file=%s>" % self.repo_config_file)
+        s.append("Core: %s" % self.core)
+        s.append("Remotes: %s" % self.remotes)
+        return '\n'.join(s)
+
+
+class OstreeConfigUpdates(object):
+    """The info a ostree update action needs to update OstreeConfig.
+
+    remote sets, origin, refspec, branches, etc.
+
+    Try to keep track of any X->Y changes for reporting.
+    """
+    def __init__(self, orig, new):
+        self.orig = orig
+        self.new = new
+        self.content_to_remote = {}
+
+        self.updater = OstreeConfigUpdater()
+
+
+    def apply(self):
+        self.updater.apply(self.orig, self.new)
+
+    def save(self):
+        """Persist self.ostree_config to disk."""
+        log.debug("OstreeConfigUpdates.save")
+        self.orig.save()
+
 
 # still needs origin, etc
 class OstreeConfigUpdater(object):
@@ -292,11 +320,9 @@ class OstreeConfigUpdater(object):
 
     args: 'ostree_config' is a OstreeConfig object
     """
-    def __init__(self, ostree_config=None):
-        self.ostree_config = ostree_config
 
-    def update(self, updates):
-        """Replace the existing config with the OstreeConfigUpdates 'updates'.
+    def apply(self, old_ostree_config, new_ostree_config):
+        """Replace the old OstreeConfig with the new OstreeConfig new_ostree_config.
 
         Note: This replaces the whole set. It does not currently
         update remotes one by one. It will not preserve remotes in
@@ -306,21 +332,5 @@ class OstreeConfigUpdater(object):
         wont.
         """
 
-        # Create a new OstreeConfig, with the info from the OstreeConfigUpdates
-        new_ostree_config = OstreeConfig(core=updates.core,
-                                         remotes=updates.remotes)
-
-        log.debug("controller.update after: %s" % new_ostree_config.remotes)
-
         # update in place
-        self.ostree_config = new_ostree_config
-
-        # persist the new version
-        self.save()
-
-        # TODO: update origin info
-
-    def save(self):
-        """Persist self.ostree_config to disk."""
-        log.debug("OstreeConfigController.save")
-        self.ostree_config.save()
+        old_ostree_config = new_ostree_config
