@@ -85,7 +85,6 @@ class TestComparableProduct(TestComparableProductEquality):
         self.assertFalse(self.older != self.older)
 
 
-
 class TestComparableNowWithMoreDecimalPlaces(TestComparableProduct):
     older = "1"
     newer = "1.0"
@@ -119,32 +118,6 @@ class TestComparableProductMajorMinorMicroMajorMinor(TestComparableProduct):
 class TestComparableProductMajor(TestComparableProduct):
     older = "10.11.3"
     newer = "31"
-
-
-class TestComparableProductAlpha(TestComparableProduct):
-    older = "5.11.a"
-    newer = "5.11.b"
-
-
-class TestComparableProductNumberToAlpha(TestComparableProduct):
-    older = "5.11.10"
-    newer = "5.11.10b"
-
-
-class TestComparableProductJustAlpha(TestComparableProduct):
-    older = "D"
-    newer = "E"
-
-
-class TestComparableProductMutliAlpha(TestComparableProduct):
-    older = "a.b.b"
-    newer = "a.b.c"
-
-
-
-class TestComparableProductShortAlpha(TestComparableProduct):
-    older = "a.b.c"
-    newer = "a.c"
 
 
 class TestComparableProductCert(TestComparableProduct):

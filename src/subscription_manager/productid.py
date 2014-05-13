@@ -135,7 +135,7 @@ class ComparableMixin(object):
     def __ge__(self, other):
         return self._compare(self.compare_keys(other), lambda s, o: s >= o)
 
-from distutils.version import LooseVersion
+
 class ComparableProduct(ComparableMixin):
     """A comparable version from a Product. For comparing and sorting Product objects.
 
@@ -157,8 +157,8 @@ class ComparableProduct(ComparableMixin):
 
     def compare_keys(self, other):
         if self.product.id == other.product.id:
-            return (LooseVersion(self.product.version),
-                    LooseVersion(other.product.version))
+            return (self.version_tuple(self.product.version),
+                    self.version_tuple(other.product.version))
         return None
 
     def version_tuple(self, version):
