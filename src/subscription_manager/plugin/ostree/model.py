@@ -1,4 +1,4 @@
-
+import copy
 import logging
 import re
 
@@ -141,7 +141,8 @@ class OstreeConfigRepoConfigFileLoader(object):
         Could be a classmethod of OstreeConfig.
 
         This is the assocation between a OstreeConfig and
-        the config file(s) that it was read from.
+        the specific config file(s) that it was read from
+        (/ostree/repo/config).
     """
     repo_config_file = OSTREE_REPO_CONFIG
 
@@ -239,7 +240,11 @@ class OstreeConfigUpdatesBuilder(object):
             remote = OstreeRemote.from_content(content)
             new_remotes.add(remote)
 
-        updates = OstreeConfigUpdates(self.ostree_config.core,
+        new_ostree_config = self.ostree_config.copy()
+
+        # For now, old core = new core always, so the core
+        # on the updates object is the same
+        updates = OstreeConfigUpdates(new_ostree_config.core,
                                       remote_set=new_remotes)
         return updates
 
@@ -253,16 +258,16 @@ class OstreeConfig(object):
     OstreeConfig saving serializes OstreeConfig state to the
     configuration files.
     """
-    def __init__(self):
-        self.remotes = None
-        self.core = None
-
-        self.repo_config_loader = OstreeConfigRepoConfigFileLoader()
+    def __init__(self, core=None, remotes=None):
+        self.remotes = remotes
+        self.core = core
 
     # Unsure where the code to (de)serialize, and then persist these should
     # live. Here? OstreeConfigController? The Config file classes?
     def load(self):
         """Load a ostree config files and populate OstreeConfig."""
+
+        self.repo_config_loader = OstreeConfigRepoConfigFileLoader()
         self.repo_config_loader.load()
 
         self.remotes = self.repo_config_loader.remotes
@@ -276,9 +281,13 @@ class OstreeConfig(object):
         repo_config_file_saver = OstreeConfigRepoConfigFileSave(repo_config_file=repo_config_file)
         repo_config_file_saver.save(self)
 
+    def copy(self):
+        new_ostree_config = copy.deepcopy(self)
+        return new_ostree_config
+
 
 # still needs origin, etc
-class OstreeConfigController(object):
+class OstreeConfigUpdater(object):
     """Make changes to a OstreeConfig.
 
     args: 'ostree_config' is a OstreeConfig object
@@ -297,12 +306,17 @@ class OstreeConfigController(object):
         wont.
         """
 
-        # TODO: Instead of the OstreeConfigUpdates, may make more
-        #       sense to just keep a old_ostree_config, and the
-        #       new_ostree_config, persist the new, and reload?
-        self.ostree_config.remotes = updates.remote_set
+        # Create a new OstreeConfig, with the info from the OstreeConfigUpdates
+        new_ostree_config = OstreeConfig(core=updates.core,
+                                         remotes=updates.remotes)
 
-        log.debug("controller.update after: %s" % self.ostree_config.remotes)
+        log.debug("controller.update after: %s" % new_ostree_config.remotes)
+
+        # update in place
+        self.ostree_config = new_ostree_config
+
+        # persist the new version
+        self.save()
 
         # TODO: update origin info
 
