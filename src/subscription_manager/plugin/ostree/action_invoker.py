@@ -41,10 +41,10 @@ class OstreeContentUpdateActionCommand(object):
     """
     def perform(self):
         # starting state of ostree config
-        ostree_config = model.OstreeConfig()
+        repo_config = model.OstreeConfig()
 
         # populate config, handle exceptions
-        self.load_config(ostree_config)
+        self.load_config(repo_config)
 
         report = OstreeContentUpdateActionReport()
 
@@ -54,7 +54,7 @@ class OstreeContentUpdateActionCommand(object):
         # CALCULATE UPDATES
         # given current config, and the new contents, construct a list
         # of remotes to apply to our local config of remotes.
-        updates_builder = model.OstreeConfigUpdatesBuilder(ostree_config,
+        updates_builder = model.OstreeConfigUpdatesBuilder(repo_config,
                                                            content_set=entitlement_content.content_set)
         updates = updates_builder.build()
 
@@ -70,14 +70,23 @@ class OstreeContentUpdateActionCommand(object):
         updates.apply()
         updates.save()
 
+        # Now that we've updated the ostree repo config, we need to
+        # update the currently deployed osname tree .origin file:
+        # TODO: Does this need to be in the report? Is logging enough?
+        self.update_origin_file(repo_config)
+
         log.debug("Ostree update report: %s" % report)
         return report
 
-    def load_config(self, ostree_config):
+    def load_config(self, repo_config):
         try:
-            ostree_config.load()
+            repo_config.load()
         except ConfigParser.Error:
             log.info("No ostree content repo config file found. Not loading ostree config.")
+
+    def update_origin_file(self, repo_config):
+        updater = model.OstreeOriginUpdater(repo_config)
+        updater.run()
 
 
 class OstreeContent(object):

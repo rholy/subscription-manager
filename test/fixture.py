@@ -3,6 +3,7 @@ import pprint
 import unittest
 import sys
 import StringIO
+import tempfile
 
 from mock import Mock, MagicMock, NonCallableMock, patch
 
@@ -112,8 +113,25 @@ class SubManFixture(unittest.TestCase):
         self.dbus_patcher = patch('subscription_manager.managercli.CliCommand._request_validity_check')
         self.dbus_patcher.start()
 
+        self.files_to_cleanup = []
+
     def tearDown(self):
         self.dbus_patcher.stop()
+        for f in self.files_to_cleanup:
+            # Assuming these are tempfile.NamedTemporaryFile, created with
+            # the write_tempfile() method in this class.
+            f.close()
+
+    def write_tempfile(self, contents):
+        """
+        Write out a tempfile and append it to the list of those to be
+        cleaned up in tearDown.
+        """
+        fid = tempfile.NamedTemporaryFile(mode='w+b', suffix='.tmp')
+        fid.write(contents)
+        fid.seek(0)
+        self.files_to_cleanup.append(fid)
+        return fid
 
     def set_consumer_auth_cp(self, consumer_auth_cp):
         cp_provider = inj.require(inj.CP_PROVIDER)
