@@ -40,11 +40,14 @@ class OstreeContentUpdateActionCommand(object):
     Return a OstreeContentUpdateReport.
     """
     def perform(self):
+
         # starting state of ostree config
         repo_config = model.OstreeConfig()
-
-        # populate config, handle exceptions
         self.load_config(repo_config)
+        try:
+            repo_config.load()
+        except ConfigParser.Error:
+            log.info("No ostree content repo config file found. Not loading ostree config.")
 
         report = OstreeContentUpdateActionReport()
 
@@ -77,12 +80,6 @@ class OstreeContentUpdateActionCommand(object):
 
         log.debug("Ostree update report: %s" % report)
         return report
-
-    def load_config(self, repo_config):
-        try:
-            repo_config.load()
-        except ConfigParser.Error:
-            log.info("No ostree content repo config file found. Not loading ostree config.")
 
     def update_origin_file(self, repo_config):
         updater = model.OstreeOriginUpdater(repo_config)
