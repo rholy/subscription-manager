@@ -186,42 +186,25 @@ class OstreeConfigRepoFileStore(object):
 
     def __init__(self, repo_file_path=None):
         self.repo_file_path = repo_file_path or self.default_repo_file_path
+        self.repo_file = None
 
     def load(self):
-        repo_file = config.RepoFile(self.repo_file_path)
-        return repo_file
+        self.repo_file = config.RepoFile(self.repo_file_path)
+        return self.repo_file
 
+    def save(self, ostree_config):
+        if not self.repo_file:
+            self.repo_file = config.RepoFile(self.repo_file_path)
 
-class OstreeConfigRepoFileLoader(object):
-    """Load the repo config file and return a RepoFile.
-
-        Could be a classmethod of OstreeConfig.
-
-        This is the assocation between a OstreeConfig and
-        the specific config file(s) that it was read from
-        (/ostree/repo/config).
-    """
-
-    def __init__(self, repo_file_path):
-        self.repo_file_path = repo_file_path
-
-    def load(self):
-        """Read ostree repo config, and populate it's data.
-
-        Raises ConfigParser.Error based exceptions if there is no config or
-        errors reading it.
-        """
-        # TODO: when/where do we create it the first time?
-        repo_file = config.RepoFile(self.repo_file_path)
-        return repo_file
-
+        writer = OstreeConfigRepoFileWriter(self.repo_file)
+        writer.save(ostree_config)
 
 
 # persist OstreeConfig object to a config file
 class OstreeConfigRepoFileWriter(object):
     """Populate config file parser with infrom from OstreeConfig and save."""
-    def __init__(self, repo_config_file):
-        self.repo_config_file = repo_config_file
+    def __init__(self, repo_file):
+        self.repo_file = repo_file
 
     def save(self, ostree_config):
         """Persist ostree_config to self.repo_config_file."""
@@ -230,11 +213,11 @@ class OstreeConfigRepoFileWriter(object):
         # TODO: update sections, instead of deleting all and rewriting
         # may mean OstreeConfigUpdates needs to track old remote -> Content ->
         # new remote
-        self.repo_config_file.clear_remotes()
+        self.repo_file.clear_remotes()
 
         self.update_remotes(ostree_config)
         self.update_core(ostree_config)
-        self.repo_config_file.save()
+        self.repo_file.save()
 
     # serialize OstreeConfig more generally
     def update_remotes(self, ostree_config):
@@ -242,11 +225,11 @@ class OstreeConfigRepoFileWriter(object):
         # TODO: we need to figure out how to update sections
         #    this only removes all and adds new ones
         for remote in ostree_config.remotes:
-            self.repo_config_file.set_remote(remote)
+            self.repo_file.set_remote(remote)
 
     def update_core(self, ostree_config):
         """Update core section in OstreeConfig ostree_config's config file if need be."""
-        self.repo_config_file.set_core(ostree_config.core)
+        self.repo_file.set_core(ostree_config.core)
 
 
 class OstreeOriginUpdater(object):
@@ -383,12 +366,12 @@ class OstreeConfig(object):
         self.repo_file_store = None
 
     def _init_store(self):
-        self.repo_file_store = self.repo_store_class(self.repo_file_path)
+        return self.repo_store_class(self.repo_file_path)
 
     # TODO: Should this be a part of the constructor?
     def load(self):
         """Load a ostree config files and populate OstreeConfig."""
-        self._init_store()
+        self.repo_file_store = self._init_store()
 
         self.repo_file = self.repo_file_store.load()
         self.load_remotes()
@@ -403,12 +386,18 @@ class OstreeConfig(object):
     def save(self):
         """Persist OstreeConfig state to ostree config files."""
         log.debug("OstreeConfig.save")
-        self._init_store()
-        self.repo_file_store.save()
+
+        # if we don't have a backing store, open the config fil
+        # path at self.repo_file_path
+        # and use for backing store
+        if not self.repo_file_store:
+            self.repo_file_store = self._init_store()
+
+        self.repo_file_store.save(self)
 
     def __repr__(self):
         s = []
-        s.append("<OsTreeConfig file=%s>" % self.repo_config_path)
+        s.append("<OsTreeConfig repo_file_path=%s>" % self.repo_file_path)
         s.append("Core: %s" % self.core)
         s.append("Remotes: %s" % self.remotes)
         return '\n'.join(s)
