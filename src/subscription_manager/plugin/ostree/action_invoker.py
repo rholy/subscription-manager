@@ -43,7 +43,6 @@ class OstreeContentUpdateActionCommand(object):
 
         # starting state of ostree config
         repo_config = model.OstreeConfig()
-        self.load_config(repo_config)
         try:
             repo_config.load()
         except ConfigParser.Error:
