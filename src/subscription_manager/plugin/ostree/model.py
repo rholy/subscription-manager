@@ -353,11 +353,10 @@ class OstreeConfig(object):
     OstreeConfig saving serializes OstreeConfig state to the
     configuration files.
     """
-    repo_store_class = OstreeConfigRepoFileStore
 
     def __init__(self, core=None, remotes=None, repo_file_path=None):
-        self.remotes = remotes
-        self.core = core
+        self.remotes = remotes or OstreeRemotes()
+        self.core = core or OstreeCore()
         self.repo_file_path = repo_file_path
 
         # Wait for load() to load repo file since we
@@ -365,7 +364,7 @@ class OstreeConfig(object):
         self.repo_file_store = None
 
     def _init_store(self):
-        return self.repo_store_class(self.repo_file_path)
+        return OstreeConfigRepoFileStore(self.repo_file_path)
 
     # TODO: Should this be a part of the constructor?
     def load(self):
